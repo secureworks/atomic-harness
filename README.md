@@ -11,7 +11,7 @@ The automation of atomic test validation requires the following components.  You
  - Runner : [goartrun](https://github.com/secureworks/goartrun)
  - Telemetry Tool : [example](https://github.com/secureworks/telemetry-tool-example)
 
-We specify a set of tests to run (by technique IDs, test-indices or test names, or tactics), then the harness will find the matching validation criteria (if present) for each technique.  For each test (e.g. `T1027.001#1`) the harness will launch the runner and wait 30 seconds to give the agent time to send telemetry.  The harness will then look in `auditsent` to find the runner shell process, all the events for the duration of the test, and look for events that match the validation criteria in the data.  For each test, there will be the following files:
+We specify a set of tests to run (by technique IDs, test-indices or test names, or tactics), then the harness will find the matching validation criteria (if present) for each technique.  For each test (e.g. `T1027.001#1`) the harness will launch the runner and wait some seconds to give the agent time to send telemetry.  The harness will then use the telemetry tool to find events for the runner shell process, all the events for the duration of the test, and look for events that match the validation criteria in the data.  For each test, there will be the following files:
  - telemetry json
  - validation summary with matching events, time window, etc.
  - runner summary with stderr, stdout of commands and exit codes
