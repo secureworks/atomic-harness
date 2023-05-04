@@ -1,0 +1,6 @@
+// id,type,hostname,addr,port,username,password,tbd
+# the detection rules for $SERVER[rsync_server].addr will match next line
+rsync_server,rsync,,10.0.0.16,873,rsyncuser,rsyncpass531,
+rsync_ssh,rsyncssh,,10.0.0.16,2222,root,,
+http,http,,10.0.0.16,8080,,,
+http8081,http,,10.0.0.16,8081,,,
