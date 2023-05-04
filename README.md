@@ -33,9 +33,10 @@ $ sudo ./atomic-harness --serverscsv ./doc/example_servers_config.csv T1562.004#
 
 ## Run All Linux Technique Tests
 
-See the file [./data/README.md](./data/README.md) for details on where the technique file was copied from.
+The linux_techniques.csv was generated from https://raw.githubusercontent.com/mitre/cti/ATT%26CK-v12.1/enterprise-attack/enterprise-attack.json .
 In this example, I have a config file containing ip-addresses and ports of a couple of ssh and rsync test servers.
-Note, there are plenty of atomic tests missing, so you will see those get skipped.  See [./doc/example_run.txt](./doc/example_run.txt) for example output of this type of run.  Specifying a `--username` will run non-elevated-privilege tests as that user.
+Note, there are plenty of atomic tests missing, so you will see those get skipped.  
+Specifying a `--username` will run non-elevated-privilege tests as that user.
 ```sh
 $ sudo ./atomic-harness --serverscsv ./doc/example_servers_config.csv --runlist ./data/linux_techniques.csv --username bob
 ```
