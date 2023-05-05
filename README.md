@@ -75,7 +75,7 @@ Done. Output in ./testruns/harness-results-2773792211
 - `S` : NetSniff Event
 - `T` : PTrace Event
 - `V` : Volume Activity Event
-- `W` : AgentAlert (Warning) Event (e.g. ExecutableEntropy)
+- `W` : Detection / Warning (e.g. process using high cpu)
 
 ## Results Directory
 

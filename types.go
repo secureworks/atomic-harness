@@ -41,7 +41,6 @@ type CorrelationRow struct {
 }
 
 // _A_,Process,exit elevated
-// _A_,Binary,Packed=UPX,path=/tmp/packed_bin
 // _A_,Process,high_cpu
 type AlertRow struct {
 	Type string

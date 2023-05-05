@@ -96,17 +96,6 @@ func EventFromRow(id int, row []string) ExpectedEvent {
 	return obj
 }
 
-/*
-func AlertFromRow(row []string) AlertRow {
-	obj := AlertRow{}
-	obj.Type = row[1]
-	idx := 2
-	for i := idx; i < len(row); i++ {
-		obj.Matches = append(obj.Matches, row[i])
-	}
-	return obj
-}*/
-
 func CorrelationFromRow(row []string) CorrelationRow {
 	obj := CorrelationRow{}
 	obj.Type = row[1]
@@ -169,8 +158,6 @@ func LoadFile(filename string) (error) {
 				evt.IsMaybe = true
 				//fmt.Println("_E_", evt)
 				cur.ExpectedEvents = append(cur.ExpectedEvents, evt)
-			//case "_A_":
-			//	cur.ExpectedAlerts = append(cur.ExpectedAlerts, AlertFromRow(row))
 			case "_C_":
 				cur.ExpectedCorrelations = append(cur.ExpectedCorrelations, CorrelationFromRow(row))
 			case "ARG":
