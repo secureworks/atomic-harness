@@ -1010,7 +1010,8 @@ func main() {
 	}
 
 	if false == FindCriteriaForTestSpecs() {
-		return
+                // TODO: optionally support cmdline flag to exit if any criteria files missing
+		//return
 	}
 
 	if gFlagNoRun {
