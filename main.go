@@ -37,6 +37,9 @@ type SingleTestRun struct {
 
 	resultsDir string
 	workingDir string
+
+	StartTime int64
+	EndTime int64
 }
 
 type TestProgress struct {
@@ -512,7 +515,7 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 
 	// TODO: build command-line from config
 
-	cmd := exec.Command(flagTelemetryToolPath,"--validate", outPath, "--atomictemp",testRun.workingDir, "--unbatch", "--resultsdir",testRun.resultsDir,"--duration","65")
+	cmd := exec.Command(flagTelemetryToolPath,"--validate", outPath, "--atomictemp",testRun.workingDir, "--unbatch", "--resultsdir",testRun.resultsDir,"--duration","65", "--ts", fmt.Sprintf("%d,%d", testRun.StartTime, testRun.EndTime))
 
 	fmt.Println("launching ",cmd.String())
 	output, err := cmd.CombinedOutput()
@@ -537,6 +540,25 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 			fmt.Println("ERROR: unable to write file", outPath, err)
 		}
 	}
+}
+
+func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
+	path := testRun.resultsDir + "/run_summary.json"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if gVerbose {
+			fmt.Println("unable to read run_summary", err)
+		}
+		return
+	}
+	runSpec := &AtomicTest{}
+	if err = json.Unmarshal(data, runSpec); err != nil {
+		fmt.Println("Error parsing run_summary.json", path, err)
+		return
+	}
+
+	testRun.StartTime = runSpec.StartTime
+	testRun.EndTime = runSpec.EndTime
 }
 
 // echo runSpecJson | ./bin/goart --config - 
@@ -845,6 +867,9 @@ func RunTests() {
 				GoArtRunTest(testRun, runConfig)
 
 				testRun.state = StateRunnerFinished
+
+				UpdateTimestampsFromRunSummary(testRun)
+
 				SaveState(testRuns)
 			}
 
