@@ -47,6 +47,7 @@ const (
     StatusValidateFail          // 11
     StatusValidatePartial       // 12
     StatusValidateSuccess       // 13
+    StatusDelegateValidation    // 14
 )
 
 // keeping these names at 4-character for status text align
@@ -63,9 +64,9 @@ func (s TestState) String() string {
 func (s TestStatus) String() string {
     strings := [...]string{"Unknown", "MiscError", "NoAtomic","NoCriteria",
     "Skipped","InvalidArgs","RunnerFail","PreReqFail",
-	"TestFail","TestRan","ToolFail","NoTelemetry","Partial","Validated"}
+	"TestFail","TestRan","ToolFail","NoTelemetry","Partial","Validated", "Ready2Eval"}
 
-    if s < StatusUnknown || s > StatusValidateSuccess {
+    if s < StatusUnknown || s > StatusDelegateValidation {
         return "Unknown"
     }
 

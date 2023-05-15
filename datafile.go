@@ -152,12 +152,12 @@ func LoadFile(filename string) (error) {
 			case "_E_":
 				evt := EventFromRow(len(cur.ExpectedEvents),row)
 				//fmt.Println("_E_", evt)
-				cur.ExpectedEvents = append(cur.ExpectedEvents, evt)
+				cur.ExpectedEvents = append(cur.ExpectedEvents, &evt)
 			case "_?_":
 				evt := EventFromRow(len(cur.ExpectedEvents),row)
 				evt.IsMaybe = true
 				//fmt.Println("_E_", evt)
-				cur.ExpectedEvents = append(cur.ExpectedEvents, evt)
+				cur.ExpectedEvents = append(cur.ExpectedEvents, &evt)
 			case "_C_":
 				cur.ExpectedCorrelations = append(cur.ExpectedCorrelations, CorrelationFromRow(row))
 			case "ARG":

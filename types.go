@@ -22,7 +22,8 @@ type ExpectedEvent struct {
 	FieldChecks []FieldCriteria   `json:"field_checks"`
 	IsMaybe     bool              `json:"is_maybe,omitempty"`
 
-	//Matches     []proto.Message   `json:"matches,omitempty"`
+
+	Matches     []string   `json:"matches,omitempty"`
 }
 /*type ExpectedEvent struct {
 	Id int
@@ -57,7 +58,8 @@ type MitreTestCriteria struct {
 	Technique        string              `json:"technique"`
 	TestIndex        uint                `json:"test_index"`
 	TestName         string              `json:"test_name"`
-	ExpectedEvents   []ExpectedEvent     `json:"expected_events"`
+	ExpectedEvents   []*ExpectedEvent     `json:"expected_events"`
+	ExpectedCorrelations []*CorrelationRow  `json:"exp_correlations,omitempty"`
 }
 
 // T1562.004,linux,7,Stop/Start UFW firewall

@@ -540,6 +540,11 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 			fmt.Println("ERROR: unable to write file", outPath, err)
 		}
 	}
+
+	if int(StatusDelegateValidation) == exitCode {
+		// read `simple_telemetry.json` and validate
+		ValidateSimpleTelemetry(testRun)
+	}
 }
 
 func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
