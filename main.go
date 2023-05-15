@@ -38,8 +38,14 @@ type SingleTestRun struct {
 	resultsDir string
 	workingDir string
 
-	StartTime int64
-	EndTime int64
+	StartTime         int64  // timestamps returned by goartrun for test
+	EndTime           int64
+
+	TimeOfParentShell int64  // determined using IsGoArtStage()
+	TimeOfNextStage   int64
+	ShellPid          int64
+	TimeWorkDirCreate int64
+	TimeWorkDirDelete int64
 }
 
 type TestProgress struct {
@@ -67,11 +73,14 @@ var flagServerConfigsCsvPath string
 var flagRegularRunUser string
 var flagRetryFailed string
 var flagClearTelemetryCache bool
+var flagFilterByGoartrunShell bool
+var flagFilterFileEventsTmp bool
 
 var gTestSpecs []*TestSpec = []*TestSpec{}
 var gRecs []*AtomicTestCriteria = []*AtomicTestCriteria{} // our detection rules
 var gSysInfo = &SysInfoVars{}
 var gVerbose = false
+var gDebug = false
 var gServerConfigs = map[string]string{}
 var gTechniquesMissingTests = []string{}
 var gMitreTechniqueNames = map[string]string{} // loaded from data/linux_techniques.csv
@@ -89,10 +98,13 @@ func init() {
 	flag.StringVar(&flagTechniquesFilePath, "runlist", "", "path to file containing list of techniques to run. CSV or newline-delimited text")
 	flag.StringVar(&flagServerConfigsCsvPath, "serverscsv", "", "path to CSV file containing list of servers referenced in detection rules")
 	flag.StringVar(&flagRegularRunUser, "username", "", "Optional username for running unpriviledged tests")
-	flag.BoolVar(&gVerbose, "verbose", false, "print more details for debugging")
+	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
+	flag.BoolVar(&gDebug, "debug", false, "print debugging details")
 	flag.BoolVar(&gFlagNoRun, "norun", false, "exit without running any tests")
 	flag.StringVar(&flagRetryFailed, "retryfailed","","path to previous resultsdir, re-run tests not Validated or Skipped")
 	flag.BoolVar(&flagClearTelemetryCache, "telemetryclear", false, "if true, will call telemetry tool to clear cache")
+	flag.BoolVar(&flagFilterByGoartrunShell, "filtergoartsh", true, "if true, do not validate events before/after goartrun test shell")
+	flag.BoolVar(&flagFilterFileEventsTmp, "filtergoartdir", true, "if true, do not validate events before/after create and delete of goartrun working dir. Working dir is in /tmp, so if that is not in the file monitoring paths of endpoint agent, set this to false.")
 }
 
 /*

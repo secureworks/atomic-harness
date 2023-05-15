@@ -22,10 +22,13 @@ type ExtractState struct {
 
 var (
 	gValidateState        = ExtractState{}
+
+	// sh /tmp/artwork-T1560.002_3-458617291/goart-T1560.002-test.bash
+	gRxGoArtStage = regexp.MustCompile(`sh /tmp/(artwork-T[\w-_\.\d]+)/goart-(T[\d\._]+)-(\w+)`)
 )
 
 func CheckMatch(haystack,op,needle string) bool {
-	if gVerbose {
+	if gDebug {
 		fmt.Println("CheckMatch",op,"\"" + haystack + "\"",needle)
 	}
 	switch op {
@@ -54,6 +57,25 @@ func AddMatchingEvent(testRun *SingleTestRun, exp *ExpectedEvent, nativeJsonStr 
 }
 
 func CheckProcessEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr string) {
+
+	// by default, filter out anything that is not in the actual ATR test
+	// by looking for goartrun 'test' shell process event
+
+	if flagFilterByGoartrunShell {
+		if IsGoArtStage(testRun, evt.ProcessFields.Cmdline, evt.Timestamp) {
+			testRun.ShellPid = evt.ProcessFields.Pid
+			return
+		}
+		if 0 == testRun.TimeOfParentShell || 0 != testRun.TimeOfNextStage {
+			if gVerbose {
+				fmt.Println("Ignoring event before/after ATR test", nativeJsonStr)
+			}
+			return
+		}
+	}
+
+	// pull out expected process event criteria and match
+
 	for _,exp := range testRun.criteria.ExpectedEvents {
 		if exp.EventType != "Process" {
 			continue
@@ -74,7 +96,7 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr s
 				fmt.Println("ERROR: unknown FieldName", fc)
 			}
 			if isMatch {
-				if gVerbose {
+				if gDebug {
 					fmt.Printf("Field Match '%s' '%s'\n", fc.FieldName, fc.Value)
 				}
 				numMatchingChecks += 1
@@ -89,6 +111,19 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr s
 }
 
 func CheckFileEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr string) {
+	if flagFilterFileEventsTmp {
+		if IsGoArtWorkDirEvent(testRun, evt) {
+			return
+		}
+		if 0 == testRun.TimeWorkDirCreate || 0 != testRun.TimeWorkDirDelete {
+			if gVerbose {
+				fmt.Println("Ignoring event before/after goartrun working dir event", nativeJsonStr)
+			}
+			return
+		}
+	}
+
+
 	for _,exp := range testRun.criteria.ExpectedEvents {
 		if exp.EventType != "File" {
 			continue
@@ -293,6 +328,70 @@ func GetTelemChar(exp *ExpectedEvent) string {
 	return "?"
 }
 
+/**
+ * IsGoArtStage will check the commandline to see if it matches
+ * a goartrun execution.  Specifically for the 'test' stage.  Any
+ * process events after the run of that test script and before the
+ * next goartrun stage is part of the test.  While we have
+ * gTimeRangeStart and gTimeRangeEnd as a rough +/- 1-second range,
+ * this helps narrow down more so we don't have process events
+ * from prereq, setup, cleanup stages of a test.
+ *
+ * Side-effects: will set testRun.TimeOfParentShell,ShellPid, TimeOfNextStage
+ */
+func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
+	a := gRxGoArtStage.FindStringSubmatch(cmdline)
+	if len(a) > 3 {
+		folder := a[1]
+		technique := a[2]
+		stageName := a[3]
+		if gVerbose {
+			fmt.Println("Found stage", stageName,"for", technique,"folder:",folder)
+		}
+		if "test" == stageName {
+			// is this the target test?
+			if technique == testRun.criteria.Technique {
+				tsttok := fmt.Sprintf("%s_%d", technique, testRun.criteria.TestIndex)
+				fmt.Println("contains check", folder, tsttok, tsNs)
+				if strings.Contains(folder, tsttok) {
+					testRun.TimeOfParentShell = tsNs
+					testRun.TimeOfNextStage = 0
+				}
+			}
+		} else if 0 != testRun.TimeOfParentShell {
+			testRun.TimeOfNextStage = tsNs
+		}
+		return true
+	}
+	return false
+}
+
+/**
+ * IsGoArtWorkDirEvent will check the file event target path,
+ * if it matches create or delete, then it's the start/end of test
+ *
+ * Side-effects: will set testRun.TimeWorkDirCreate, TimeWorkDirDelete
+ */
+func IsGoArtWorkDirEvent(testRun *SingleTestRun, evt *SimpleEvent) bool {
+	if evt.FileFields.TargetPath == testRun.workingDir {
+		if evt.FileFields.Action == SimpleFileActionDelete {
+			testRun.TimeWorkDirDelete = evt.Timestamp
+		} else if evt.FileFields.Action == SimpleFileActionOpenRead {
+			return false
+		} else {
+			testRun.TimeWorkDirCreate = evt.Timestamp
+		}
+		return true
+	}
+	return false
+}
+
+/**
+ * GetTelemTypes will return the collection of expected
+ * event types found/not-found as a string.
+ * e.g. "P<f>F<N>" would represent Process and FileMod
+ *      found, but file-read and netflow not found
+ */
 func GetTelemTypes(criteria *MitreTestCriteria) string {
 	s := ""
 	for _,exp := range criteria.ExpectedEvents {
