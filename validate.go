@@ -190,6 +190,54 @@ func CheckFileEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr stri
 	}
 }
 
+func CheckNetflowEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr string) {
+	for _,exp := range gValidateState.TestData.ExpectedEvents {
+
+		if strings.ToUpper(exp.EventType) != "NETFLOW" {
+			continue
+		}
+
+		// make regexes from subtype and all fieldchecks
+
+		s := strings.ReplaceAll(exp.SubType, "*",".*")
+		rx, err := regexp.Compile(strings.ToLower(s))
+		if err != nil {
+			fmt.Println("Invalid netflow regex",exp.SubType,err)
+			continue
+		}
+
+		regexes := []*regexp.Regexp{rx}
+
+		for _,fc := range exp.FieldChecks {
+			s := strings.ReplaceAll(fc.Value, "*",".*")
+			rx, err := regexp.Compile(strings.ToLower(s))
+			if err != nil {
+				fmt.Println("Invalid netflow regex",fc,err)
+			}
+			regexes = append(regexes, rx)
+		}
+
+		// now check against FlowStr, FlowStrDns
+
+		if gVerbose {
+			fmt.Println("Netflow",evt.NetflowFields.FlowStr, exp.SubType)
+		}
+		for _,rx := range regexes {
+			matched := rx.MatchString(evt.NetflowFields.FlowStr)
+			if matched {
+				AddMatchingEvent(testRun, exp, nativeJsonStr)
+				break
+			}
+			if len(evt.NetflowFields.FlowStrDns) > 0 {
+				matched = rx.MatchString(evt.NetflowFields.FlowStrDns)
+				if matched {
+					AddMatchingEvent(testRun, exp, nativeJsonStr)
+					break
+				}
+			}
+		}
+	}
+}
 
 func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 	gValidateState = ExtractState{}
@@ -235,8 +283,8 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 			CheckFileEvent(testRun, evt, rawJsonLines[i])
 		case SimpleSchemaFileRead:
 			CheckFileEvent(testRun, evt, rawJsonLines[i])
-		//case SimpleSchemaNetflow:
-		//	CheckNetflowEvent(testRun, evt, rawJsonLines[i])
+		case SimpleSchemaNetflow:
+			CheckNetflowEvent(testRun, evt, rawJsonLines[i])
 		default:
 			fmt.Println("missing handling of type", line)
 		}
