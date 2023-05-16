@@ -23,14 +23,8 @@ type ExpectedEvent struct {
 	IsMaybe     bool              `json:"is_maybe,omitempty"`
 
 
-	Matches     []string   `json:"matches,omitempty"`
+	Matches     []*SimpleEvent   `json:"matches,omitempty"`
 }
-/*type ExpectedEvent struct {
-	Id int
-	Type string
-	SubType string
-	Matches []string
-}*/
 
 // _C_,Process,Pipe,0,1
 type CorrelationRow struct {

@@ -50,13 +50,14 @@ func CheckMatch(haystack,op,needle string) bool {
 	return false
 }
 
-func AddMatchingEvent(testRun *SingleTestRun, exp *types.ExpectedEvent, nativeJsonStr string) {
-	exp.Matches = append(exp.Matches, nativeJsonStr)
+func AddMatchingEvent(testRun *SingleTestRun, exp *types.ExpectedEvent, event *types.SimpleEvent) {
+	exp.Matches = append(exp.Matches, event)
 	gValidateState.NumMatches += 1
 	UpdateCoverage()
 }
 
-func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) {
+func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
 
 	// by default, filter out anything that is not in the actual ATR test
 	// by looking for goartrun 'test' shell process event
@@ -64,13 +65,13 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 	if flagFilterByGoartrunShell {
 		if IsGoArtStage(testRun, evt.ProcessFields.Cmdline, evt.Timestamp) {
 			testRun.ShellPid = evt.ProcessFields.Pid
-			return
+			return retval
 		}
 		if 0 == testRun.TimeOfParentShell || 0 != testRun.TimeOfNextStage {
 			if gVerbose {
 				fmt.Println("Ignoring event before/after ATR test", nativeJsonStr)
 			}
-			return
+			return retval
 		}
 	}
 
@@ -103,23 +104,26 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 			}
 		}
 		if numMatchingChecks == len(exp.FieldChecks) {
-			AddMatchingEvent(testRun, exp, nativeJsonStr)
+			AddMatchingEvent(testRun, exp, evt)
+			retval = true
 		} else if numMatchingChecks > 0 {
 			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
 		}
 	}
+	return retval
 }
 
-func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) {
+func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
 	if flagFilterFileEventsTmp {
 		if IsGoArtWorkDirEvent(testRun, evt) {
-			return
+			return retval
 		}
 		if 0 == testRun.TimeWorkDirCreate || 0 != testRun.TimeWorkDirDelete {
 			if gVerbose {
 				fmt.Println("Ignoring event before/after goartrun working dir event", nativeJsonStr)
 			}
-			return
+			return retval
 		}
 	}
 
@@ -183,14 +187,17 @@ func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 			}
 		}
 		if numMatchingChecks == len(exp.FieldChecks) {
-			AddMatchingEvent(testRun, exp, nativeJsonStr)
+			AddMatchingEvent(testRun, exp, evt)
+			retval = true
 		} else if numMatchingChecks > 0 {
 			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
 		}
 	}
+	return retval
 }
 
-func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) {
+func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
 	for _,exp := range gValidateState.TestData.ExpectedEvents {
 
 		if strings.ToUpper(exp.EventType) != "NETFLOW" {
@@ -225,18 +232,21 @@ func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 		for _,rx := range regexes {
 			matched := rx.MatchString(evt.NetflowFields.FlowStr)
 			if matched {
-				AddMatchingEvent(testRun, exp, nativeJsonStr)
+				AddMatchingEvent(testRun, exp, evt)
+				retval = true
 				break
 			}
 			if len(evt.NetflowFields.FlowStrDns) > 0 {
 				matched = rx.MatchString(evt.NetflowFields.FlowStrDns)
 				if matched {
-					AddMatchingEvent(testRun, exp, nativeJsonStr)
+					AddMatchingEvent(testRun, exp, evt)
+					retval = true
 					break
 				}
 			}
 		}
 	}
+	return retval
 }
 
 func ValidateSimpleTelemetry(testRun *SingleTestRun) {
@@ -250,14 +260,14 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 
 	// load simple_telemetry.json, process each event
 
-	path := testRun.resultsDir + "/simple_telemetry.json"
+	path := testRun.resultsDir + "/../simple_telemetry.json"
 	simpleLines, err := ReadFileLines(path)
 	if err != nil {
 		fmt.Println("ERROR: file not found", path, err)
 		return
 	}
 
-	path = testRun.resultsDir + "/telemetry.json"
+	path = testRun.resultsDir + "/../telemetry.json"
 	rawJsonLines, err := ReadFileLines(path)
 	if err != nil {
 		fmt.Println("ERROR: file not found", path, err)
@@ -268,6 +278,13 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 		return
 	}
 
+	// write native telemetry matches to a file
+	outpath := testRun.resultsDir + "/matches.json"
+	matchFileHandle,err := os.OpenFile(outpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		fmt.Println("ERROR: unable to create outfile",outpath, err)
+	}
+
 	for i, line := range simpleLines {
 		evt := &types.SimpleEvent{}
 
@@ -276,18 +293,29 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 			fmt.Println("ERROR: parsing event",err, line)
 			continue
 		}
+
+		rawEventStr := rawJsonLines[i]
+		isMatch := false
+
 		switch evt.EventType {
 		case types.SimpleSchemaProcess:
-			CheckProcessEvent(testRun, evt, rawJsonLines[i])
+			isMatch = CheckProcessEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaFilemod:
-			CheckFileEvent(testRun, evt, rawJsonLines[i])
+			isMatch = CheckFileEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaFileRead:
-			CheckFileEvent(testRun, evt, rawJsonLines[i])
+			isMatch = CheckFileEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaNetflow:
-			CheckNetflowEvent(testRun, evt, rawJsonLines[i])
+			isMatch = CheckNetflowEvent(testRun, evt, rawEventStr)
 		default:
 			fmt.Println("missing handling of type", line)
 		}
+		if isMatch && matchFileHandle != nil {
+			fmt.Fprintln(matchFileHandle, rawEventStr)
+		}
+	}
+
+	if matchFileHandle != nil {
+		matchFileHandle.Close()
 	}
 
 	// save results to file

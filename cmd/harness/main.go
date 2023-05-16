@@ -488,32 +488,9 @@ func ClearTelemetryCache() {
 	}
 }
 
-func LaunchTelemetryExtractor(testRun *SingleTestRun) {
+func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 
-	outPath := testRun.resultsDir + "/validate_spec.json"
-
-	// open file to write
-	fileHandle, err := os.OpenFile(outPath, os.O_WRONLY|os.O_CREATE, 0644)
-	if err != nil {
-		fmt.Println("ERROR: unable to write file", outPath, err)
-	}
-	
-	enc := json.NewEncoder(fileHandle)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("","  ")
-
-	// write test criteria to file
-	err = enc.Encode(testRun.criteria)
-	if err != nil {
-		fmt.Println("ERROR:", err);
-		return
-	}
-	fileHandle.Close()
-
-
-	// TODO: build command-line from config
-
-	cmd := exec.Command(flagTelemetryToolPath,"--fetch", "--resultsdir", testRun.resultsDir, "--ts", fmt.Sprintf("%d,%d", testRun.StartTime, testRun.EndTime))
+	cmd := exec.Command(flagTelemetryToolPath,"--fetch", "--resultsdir", resultsDir, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 
 	fmt.Println("launching ",cmd.String())
 	output, err := cmd.CombinedOutput()
@@ -524,24 +501,15 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 	//look for StateValidateSuccess, etc.
 	fmt.Println("telemetry tool exit code:",exitCode, status)
 
-	if exitCode >= int(types.StatusTelemetryToolFailure) && exitCode <= int(types.StatusValidateSuccess) {
-		testRun.status = status
-	}
-
 	if err != nil && exitCode <= int(types.StatusValidateFail) {
 		fmt.Println("  telemetry tool err:", err)
 	}
 	if len(output) != 0 {
-		outPath := testRun.resultsDir + "/telemetry_tool_output.txt"
+		outPath := resultsDir + "/telemetry_tool_output.txt"
 		err = os.WriteFile(outPath, output, 0644)
 		if err != nil {
 			fmt.Println("ERROR: unable to write file", outPath, err)
 		}
-	}
-
-	if int(types.StatusDelegateValidation) == exitCode {
-		// read `simple_telemetry.json` and validate
-		ValidateSimpleTelemetry(testRun)
 	}
 }
 
@@ -914,6 +882,8 @@ func LoadTechniquesList(filename string) (error) {
 func RunTests() {
 	testRuns := []*SingleTestRun{}
 
+	startTime := time.Now().Unix()
+
 	for _,spec := range gTestSpecs {
 
 		for _, rec := range spec.Criteria {
@@ -1008,6 +978,7 @@ func RunTests() {
 			break
 		}
 	}
+	endTime := time.Now().Unix()
 
 	// fix ownership of results dirs
 
@@ -1027,13 +998,17 @@ func RunTests() {
 
 	// now get telemetry
 	if false == gFlagNoRun && true == gKeepRunning {
+
+		FetchTelemetry(flagResultsPath, startTime, endTime)
+
 		for _,testRun := range testRuns {
 			if testRun.status == types.StatusTestSuccess {
 				//spec *AtomicTestCriteria, workingDir string, resultsDir string
 				testRun.state = types.StateWaitForTelemetry
 				SaveState(testRuns)
 
-				LaunchTelemetryExtractor(testRun)
+				//LaunchTelemetryExtractor(testRun)
+				ValidateSimpleTelemetry(testRun)
 
 				testRun.state = types.StateDone
 			}
