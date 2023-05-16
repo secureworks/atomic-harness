@@ -16,6 +16,15 @@ We specify a set of tests to run (by technique IDs, test-indices or test names, 
  - validation summary with matching events, time window, etc.
  - runner summary with stderr, stdout of commands and exit codes
 
+## Telemetry and Matching
+
+Since every endpoint has it's own telemetry format and schema, you need to provide a telemetry tool to fetch telemetry and convert to the simple schema used by the atomic-harness.  See the `telemetry-tool-example` to see how it is done for local osquery json results.  The harness now takes care of identifying the telemetry for each individual test and validating it against the criteria.
+
+- atomic-harness --runlist list_of_20_techniques.csv
+- harness runs `goartrun` for each atomic test found for specified techniques
+- harness calls `telemtool --fetch --resultsDir /tmp/somedir --ts tstart,tend`
+- harness looks in resultsDir/simple_telemetry.json provided by telemetry tool and finds events for each test, evaluates matching criteria
+
 ## Setup and Build
 
 ```sh
@@ -79,22 +88,21 @@ Done. Output in ./testruns/harness-results-2773792211
 
 ## Results Directory
 
-Inside the `harness-results-xx` directory, you will see subdirectory for each test for each technique, as well as `status.txt` and `status.json` files.
+Inside the `harness-results-xx` directory, you will see subdirectory for each test for each technique, as well as `status.txt` and `status.json` files.  Additionally, there will be `telemetry.json` and `simple_telemetry.json` files containing the raw telemetry and simplified telemetry provided by the telemetry tool.
 
-For successful test runs, the subdirectories will contain something like
+For successful test runs, the Txxx subdirectories will contain something like
 ```sh
 -rw-r--r--   1 develop develop     96 Jan  5 12:35 match_string.txt
+-rw-r--r--   1 root    root       655 Jan  5 12:42 matches.json
 -rw-r--r--   1 develop develop   2026 Jan  5 12:35 runner-stdout.txt
 -rw-r--r--   1 develop develop    465 Jan  5 12:35 runspec.json
 -rw-r--r--   1 develop develop   1898 Jan  5 12:35 run_summary.json
 -rw-r--r--   1 root    root        12 Jan  5 12:42 status.txt
 -rw-r--r--   1 root    root      5492 Jan  5 12:42 telemetry_tool_output.txt
--rw-r--r--   1 root    root    145817 Jan  5 12:42 telemetry.json
--rw-r--r--   1 root    root       655 Jan  5 12:42 validate_spec.json
 -rw-r--r--   1 root    root      4384 Jan  5 12:42 validate_summary.json
 ```
 
 ## Troubleshooting a partial or missing telemetry test
-I will usually start with the `validate_summary.json` file.  I will the file in my editor (Sublime), which allows me to select nodes in the JSON to collapse.  I will collapse the matches for all tests to find the expected events that are missing. (TODO: automate this and provide another file).  Then I will look in the `telemetry.json` which contains all events in the timeframe, to see if the event was present, but the matching didn't find it.
+I will usually start with the `validate_summary.json` file.  I will view the file in my editor (Sublime), which allows me to select nodes in the JSON to collapse.  Collapsing the matches for all tests to find the expected events that are missing. (TODO: automate this and provide another file).  Then I will look in the `telemetry.json` which contains all events in the timeframe, to see if the event was present, but the matching didn't find it.
 
 
