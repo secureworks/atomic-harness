@@ -1,11 +1,14 @@
 package main
 
 import (
+	"bytes"
+	"encoding/csv"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil" // TODO: shouldn't need this anymore
+	"log"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -15,47 +18,30 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	types "github.com/secureworks/atomic-harness/pkg/types"
+	utils "github.com/secureworks/atomic-harness/pkg/utils"
 )
 
-// TestSpec - schema summarizing atomic-validation-criteria for test(s)
-// for example, it could be all tests for "T1027"
-type TestSpec struct {
-	Technique        string
-	TestIndex        string  // optional?
-	TestName         string  // optional?
-
-	Criteria         []*AtomicTestCriteria
-}
-
 type SingleTestRun struct {
-	state      TestState
-	exitCode   int
-	status     TestStatus
-	matchString string       // output from telemetry tool shows which expected event types matched
+    state      types.TestState
+    exitCode   int
+    status     types.TestStatus
+    matchString string       // output from telemetry tool shows which expected event types matched
 
-	criteria   *AtomicTestCriteria
+    criteria   *types.AtomicTestCriteria
 
-	resultsDir string
-	workingDir string
+    resultsDir string
+    workingDir string
 
-	StartTime         int64  // timestamps returned by goartrun for test
-	EndTime           int64
+    StartTime         int64  // timestamps returned by goartrun for test
+    EndTime           int64
 
-	TimeOfParentShell int64  // determined using IsGoArtStage()
-	TimeOfNextStage   int64
-	ShellPid          int64
-	TimeWorkDirCreate int64
-	TimeWorkDirDelete int64
-}
-
-type TestProgress struct {
-	Technique        string
-	TestIndex        string  // optional?
-	TestName         string  // optional?
-
-	State      TestState
-	ExitCode   int
-	Status     TestStatus
+    TimeOfParentShell int64  // determined using IsGoArtStage()
+    TimeOfNextStage   int64
+    ShellPid          int64
+    TimeWorkDirCreate int64
+    TimeWorkDirDelete int64
 }
 
 var kTestRunTimeoutSeconds = 10*time.Second
@@ -76,9 +62,9 @@ var flagClearTelemetryCache bool
 var flagFilterByGoartrunShell bool
 var flagFilterFileEventsTmp bool
 
-var gTestSpecs []*TestSpec = []*TestSpec{}
-var gRecs []*AtomicTestCriteria = []*AtomicTestCriteria{} // our detection rules
-var gSysInfo = &SysInfoVars{}
+var gTestSpecs []*types.TestSpec = []*types.TestSpec{}
+var gRecs []*types.AtomicTestCriteria = []*types.AtomicTestCriteria{} // our detection rules
+var gSysInfo = &types.SysInfoVars{}
 var gVerbose = false
 var gDebug = false
 var gServerConfigs = map[string]string{}
@@ -86,7 +72,7 @@ var gTechniquesMissingTests = []string{}
 var gMitreTechniqueNames = map[string]string{} // loaded from data/linux_techniques.csv
 var gFlagNoRun = false
 var gKeepRunning = true
-var gAtomicTests = map[string][]*TestSpec{} // tid -> tests
+var gAtomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
 func init() {
 	flag.StringVar(&flagCriteriaPath, "criteriapath", "", "path to folder containing CSV files used to validate telemetry")
@@ -135,7 +121,7 @@ func ParseTestSpecs(techniques []string) bool {
 
 		if strings.Contains(str,"#") {
 			a := strings.SplitN(str,"#",2)
-			spec := &TestSpec{}
+			spec := &types.TestSpec{}
 			spec.Technique = a[0]
 			spec.TestIndex = a[1]
 			// TODO: validate TestIndex is uint >= 1
@@ -144,13 +130,13 @@ func ParseTestSpecs(techniques []string) bool {
 		} else if strings.Contains(str,",") {
 
 			a := strings.SplitN(str,",",2)
-			spec := &TestSpec{}
+			spec := &types.TestSpec{}
 			spec.Technique = a[0]
 			spec.TestName = a[1]
 			gTestSpecs = append(gTestSpecs, spec)
 
 		} else {
-			spec := &TestSpec{}
+			spec := &types.TestSpec{}
 			spec.Technique = str
 			gTestSpecs = append(gTestSpecs, spec)
 		}
@@ -279,7 +265,7 @@ func AddTestRange(from string, to string) int {
 	for _,rec := range gRecs {
 		if rec.Technique >= from && rec.Technique <= to {
 
-			spec := &TestSpec{}
+			spec := &types.TestSpec{}
 			spec.Technique = rec.Technique
 			spec.TestIndex = fmt.Sprintf("%d",rec.TestIndex)
 			spec.TestName = rec.TestName
@@ -332,7 +318,7 @@ func AddTestsForTechniqueUsingCriteria(tid string) int {
 			continue
 		}
 
-		spec := &TestSpec{}
+		spec := &types.TestSpec{}
 		spec.Technique = rec.Technique
 		spec.TestIndex = fmt.Sprintf("%d",rec.TestIndex)
 		spec.TestName = rec.TestName
@@ -374,7 +360,7 @@ func AddTestsForTechniqueUsingAtomicsIndex(targetTid string) int {
 }
 
 
-func AddOnce(spec *TestSpec, entry *AtomicTestCriteria) {
+func AddOnce(spec *types.TestSpec, entry *types.AtomicTestCriteria) {
 	for i,_ := range spec.Criteria {
 		if spec.Criteria[i].Id() == entry.Id() {
 			return
@@ -441,7 +427,7 @@ func FindCriteriaForTestSpecs() bool {
 /*
  * @return true if all substitutions were met
  */
-func SubstituteVarsInCriteria(criteria *AtomicTestCriteria) bool {
+func SubstituteVarsInCriteria(criteria *types.AtomicTestCriteria) bool {
 
 	for key,val := range criteria.Args {
 		needle := "#{" + key + "}"
@@ -533,16 +519,16 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 	output, err := cmd.CombinedOutput()
 
 	exitCode := cmd.ProcessState.ExitCode()
-	status := TestStatus(exitCode)
+	status := types.TestStatus(exitCode)
 
 	//look for StateValidateSuccess, etc.
 	fmt.Println("telemetry tool exit code:",exitCode, status)
 
-	if exitCode >= int(StatusTelemetryToolFailure) && exitCode <= int(StatusValidateSuccess) {
+	if exitCode >= int(types.StatusTelemetryToolFailure) && exitCode <= int(types.StatusValidateSuccess) {
 		testRun.status = status
 	}
 
-	if err != nil && exitCode <= int(StatusValidateFail) {
+	if err != nil && exitCode <= int(types.StatusValidateFail) {
 		fmt.Println("  telemetry tool err:", err)
 	}
 	if len(output) != 0 {
@@ -553,7 +539,7 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 		}
 	}
 
-	if int(StatusDelegateValidation) == exitCode {
+	if int(types.StatusDelegateValidation) == exitCode {
 		// read `simple_telemetry.json` and validate
 		ValidateSimpleTelemetry(testRun)
 	}
@@ -568,7 +554,7 @@ func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
 		}
 		return
 	}
-	runSpec := &AtomicTest{}
+	runSpec := &types.AtomicTest{}
 	if err = json.Unmarshal(data, runSpec); err != nil {
 		fmt.Println("Error parsing run_summary.json", path, err)
 		return
@@ -615,7 +601,7 @@ func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
 
 
 	testRun.exitCode = cmd.ProcessState.ExitCode()
-	testRun.status = TestStatus(testRun.exitCode)
+	testRun.status = types.TestStatus(testRun.exitCode)
 	fmt.Printf("runner exited with code %d %s\n",testRun.exitCode,testRun.status)
 }
 
@@ -624,7 +610,7 @@ func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
  * substitute any that begin with '$' character
  * @return true if all substituions were met
  */
-func SubstituteSysInfoArgs(spec *AtomicTestCriteria) bool {
+func SubstituteSysInfoArgs(spec *types.AtomicTestCriteria) bool {
 	for key,val := range spec.Args {
 		if len(val) == 0 || val[0] != '$' {
 			continue
@@ -677,8 +663,8 @@ func SubstituteSysInfoArgs(spec *AtomicTestCriteria) bool {
 
    Inputs     map[string]string
  */
-func BuildRunSpec(spec *AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
-	obj := RunSpec{}
+func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
+	obj := types.RunSpec{}
 	obj.Technique = spec.Technique
 	obj.TestIndex = int(spec.TestIndex - 1)
 	obj.TempDir = atomicTempDir
@@ -704,7 +690,7 @@ func BuildRunSpec(spec *AtomicTestCriteria, atomicTempDir string, resultsDir str
 	return string(j)
 }
 
-func ShouldBeSkipped(atc *AtomicTestCriteria) bool {
+func ShouldBeSkipped(atc *types.AtomicTestCriteria) bool {
 	return len(atc.Warnings) > 0
 }
 
@@ -728,16 +714,16 @@ func WriteTestRunStatusFile(testRun *SingleTestRun) {
 }
 
 func MarkAsSkipped(testRun *SingleTestRun) {
-	testRun.status = StatusSkipped
-	testRun.state = StateDone
+	testRun.status = types.StatusSkipped
+	testRun.state = types.StateDone
 	WriteTestRunStatusFile(testRun)
 }
 
 func SaveState(tests []*SingleTestRun) {
 
-	progress := []TestProgress{}
+	progress := []types.TestProgress{}
 	for _,t := range tests {
-		obj := TestProgress{t.criteria.Technique, fmt.Sprintf("%d",t.criteria.TestIndex), t.criteria.TestName, t.state, t.exitCode, t.status}
+		obj := types.TestProgress{t.criteria.Technique, fmt.Sprintf("%d",t.criteria.TestIndex), t.criteria.TestName, t.state, t.exitCode, t.status}
 		progress = append(progress, obj)
 	}
 	j,err := json.MarshalIndent(progress,"","  ")
@@ -783,15 +769,15 @@ func SPrintState(tests []*SingleTestRun, byCategory bool) string {
 	byState := map[string][]string {}
 	for _,t := range tests {
 		switch t.status {
-		case StatusValidateSuccess:
+		case types.StatusValidateSuccess:
 			numValidated += 1
-		case StatusValidateFail:
+		case types.StatusValidateFail:
 			numValidateFail += 1
-		case StatusValidatePartial:
+		case types.StatusValidatePartial:
 			numPartial += 1
-		case StatusPreReqFail:
+		case types.StatusPreReqFail:
 			numMissingDeps += 1
-		case StatusSkipped:
+		case types.StatusSkipped:
 			numSkipped += 1
 		default:
 			numRunErrors += 1
@@ -819,6 +805,112 @@ func SPrintState(tests []*SingleTestRun, byCategory bool) string {
 	return s
 }
 
+func LoadFile(filename string) (error) {
+	var cur *types.AtomicTestCriteria
+
+	data, err := ioutil.ReadFile(filename);
+	if err != nil {
+		return err
+	}
+
+	r := csv.NewReader(bytes.NewReader(data))
+	r.LazyQuotes = true
+	r.Comment = '#'
+	r.FieldsPerRecord = -1 // no validation on num columns per row
+
+	records, err := r.ReadAll()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _,row := range records {
+
+		if 3 != len(row[0]) {
+
+			if len(row[0]) < 3 {
+				continue
+			}
+			if row[0][0] == '#' {
+				continue
+			}
+			if row[0][0] == 'T' {
+				// new test
+				//fmt.Println("new test", row[0], )
+				if len(row) != 4 {
+					fmt.Println("ERROR: Expected 4 columns for T row", row)
+					continue
+				}
+				cur = utils.AtomicTestCriteriaNew(row[0], row[1], row[2], row[3])
+				gRecs = append(gRecs , cur)
+				//cur = gRecs[len(gRecs)-1]
+			} else {
+				fmt.Println("UNKNOWN", row[0])
+			}
+		} else {
+			switch row[0] {
+			case "_E_":
+				evt := utils.EventFromRow(len(cur.ExpectedEvents),row)
+				//fmt.Println("_E_", evt)
+				cur.ExpectedEvents = append(cur.ExpectedEvents, &evt)
+			case "_?_":
+				evt := utils.EventFromRow(len(cur.ExpectedEvents),row)
+				evt.IsMaybe = true
+				//fmt.Println("_E_", evt)
+				cur.ExpectedEvents = append(cur.ExpectedEvents, &evt)
+			case "_C_":
+				cur.ExpectedCorrelations = append(cur.ExpectedCorrelations, utils.CorrelationFromRow(row))
+			case "ARG":
+				cur.Args[row[1]] = row[2]
+			case "FYI":
+				cur.Infos = append(cur.Infos,row[1])
+			case "!!!":
+				cur.Warnings = append(cur.Warnings,row[1])
+			default:
+				fmt.Println("ENTRY", row[0])
+			}
+		}
+	}
+	return nil
+}
+
+func LoadTechniquesList(filename string) (error) {
+
+	data, err := ioutil.ReadFile(filename);
+	if err != nil {
+		return err
+	}
+
+	r := csv.NewReader(bytes.NewReader(data))
+	r.LazyQuotes = true
+	r.FieldsPerRecord = -1 // no validation on num columns per row
+
+	records, err := r.ReadAll()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _,row := range records {
+		//fmt.Println(row)
+
+		tid := row[0]
+		if len(tid) == 0 || tid[0] != 'T' {
+			continue
+		}
+
+		num := AddTestsForTechniqueUsingAtomicsIndex(tid)
+		if num == 0 {
+			if gVerbose {
+				fmt.Println("ERROR: no tests found for technique",tid)
+			}
+			gTechniquesMissingTests = append(gTechniquesMissingTests, tid)
+		}
+	}
+
+	return nil
+}
+
+
+
 func RunTests() {
 	testRuns := []*SingleTestRun{}
 
@@ -836,7 +928,7 @@ func RunTests() {
 			testRun := &SingleTestRun{}
 			testRun.criteria = rec
 			testRun.resultsDir = resultsDir
-			testRun.state = StateCriteriaLoaded
+			testRun.state = types.StateCriteriaLoaded
 			testRuns = append(testRuns, testRun)
 
 			SaveState(testRuns)
@@ -858,7 +950,7 @@ func RunTests() {
 			testRun.workingDir = workingDir
 
 			// load atomic to get default args
-			LoadAtomicDefaultArgs(rec)
+			utils.LoadAtomicDefaultArgs(rec, flagAtomicsPath, gVerbose)
 
 			// some test Args and field checks need variable substitutions
 
@@ -878,12 +970,12 @@ func RunTests() {
 			os.Chmod(resultsDir, 0777)
 
 			if !gFlagNoRun	{
-				testRun.state = StateRunnerLaunched
+				testRun.state = types.StateRunnerLaunched
 				SaveState(testRuns)
 
 				GoArtRunTest(testRun, runConfig)
 
-				testRun.state = StateRunnerFinished
+				testRun.state = types.StateRunnerFinished
 
 				UpdateTimestampsFromRunSummary(testRun)
 
@@ -936,14 +1028,14 @@ func RunTests() {
 	// now get telemetry
 	if false == gFlagNoRun && true == gKeepRunning {
 		for _,testRun := range testRuns {
-			if testRun.status == StatusTestSuccess {
+			if testRun.status == types.StatusTestSuccess {
 				//spec *AtomicTestCriteria, workingDir string, resultsDir string
-				testRun.state = StateWaitForTelemetry
+				testRun.state = types.StateWaitForTelemetry
 				SaveState(testRuns)
 
 				LaunchTelemetryExtractor(testRun)
 
-				testRun.state = StateDone
+				testRun.state = types.StateDone
 			}
 			WriteTestRunStatusFile(testRun)
 			SaveState(testRuns)
@@ -1008,13 +1100,13 @@ func main() {
 		os.Chmod(flagResultsPath,0777)
 	}
 
-	err = LoadAtomicsIndexCsv()
+	err = utils.LoadAtomicsIndexCsv(flagAtomicsPath, &gAtomicTests)
 	if err != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
 		os.Exit(1)
 	}
 
-	LoadMitreTechniqueCsv("./data/linux_techniques.csv", &gMitreTechniqueNames)
+	utils.LoadMitreTechniqueCsv("./data/linux_techniques.csv", &gMitreTechniqueNames)
 
 	if false == LoadCriteriaFiles(flagCriteriaPath) {
 		return
@@ -1027,7 +1119,7 @@ func main() {
 			os.Exit(1)
 		}
 	} else if flagRetryFailed != "" {
-		err := LoadFailedTechniquesList(flagRetryFailed)
+		err := utils.LoadFailedTechniquesList(flagRetryFailed, &gTestSpecs)
 		if err != nil {
 			fmt.Println("unable to load status.json")
 			os.Exit(2)
@@ -1048,7 +1140,7 @@ func main() {
 	}
 
 	if flagServerConfigsCsvPath != "" {
-		LoadServerConfigsCsv(flagServerConfigsCsvPath, &gServerConfigs)
+		utils.LoadServerConfigsCsv(flagServerConfigsCsvPath, &gServerConfigs)
 	}
 
 	if false == FindCriteriaForTestSpecs() {

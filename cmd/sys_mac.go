@@ -8,6 +8,8 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+
+	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
 var gSubnetMaskMappings = map[string]string{
@@ -46,7 +48,7 @@ var gSubnetMaskMappings = map[string]string{
 	"0xffffffff": "255.255.255.255",
 }
 
-func GetSysInfoMacOS(dest *SysInfoVars) error {
+func GetSysInfoMacOS(dest *types.SysInfoVars) error {
 	err := GetIpInfo(dest)
 	if err != nil {
 		return err
@@ -56,7 +58,7 @@ func GetSysInfoMacOS(dest *SysInfoVars) error {
 	return nil
 }
 
-func GetHostName(dest *SysInfoVars) {
+func GetHostName(dest *types.SysInfoVars) {
 	cmd := exec.Command("hostname")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -66,7 +68,7 @@ func GetHostName(dest *SysInfoVars) {
 	dest.Hostname = strings.TrimSpace(string(output))
 }
 
-func GetUserName(dest *SysInfoVars) {
+func GetUserName(dest *types.SysInfoVars) {
 	cmd := exec.Command("whoami")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -76,7 +78,7 @@ func GetUserName(dest *SysInfoVars) {
 	dest.Username = strings.TrimSpace(string(output))
 }
 
-func GetIpInfo(dest *SysInfoVars) error {
+func GetIpInfo(dest *types.SysInfoVars) error {
 
 	// get active interface
 	var activeInterface string
@@ -175,7 +177,7 @@ func GetActiveInetInterface(outActiveInterfaceStr *string) error {
 	return nil
 }
 
-func ParseInterfaceDetails(dest *SysInfoVars, s string) {
+func ParseInterfaceDetails(dest *types.SysInfoVars, s string) {
 	a := strings.SplitN(s, "\n", 25)
 	currentIf := ""
 	for _, line := range a {

@@ -1,4 +1,4 @@
-package main
+package utils
 
 /*
  * CSV data format and type definitions
@@ -18,10 +18,12 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
-func AtomicTestCriteriaNew(tid string, plat string, numstr string, name string) *AtomicTestCriteria {
-	obj := &AtomicTestCriteria{}
+func AtomicTestCriteriaNew(tid string, plat string, numstr string, name string) *types.AtomicTestCriteria {
+	obj := &types.AtomicTestCriteria{}
 	obj.Technique = tid
 	obj.Platform = plat
 	obj.TestName = name
@@ -35,7 +37,7 @@ func AtomicTestCriteriaNew(tid string, plat string, numstr string, name string) 
 	return obj
 }
 
-func ParseFieldCriteria(str string, eventType string) (*FieldCriteria, error) {
+func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, error) {
 	a := strings.SplitN(str,"=",2)
 	if len(a) != 2 {
 		if eventType == "FILE" {
@@ -45,7 +47,7 @@ func ParseFieldCriteria(str string, eventType string) (*FieldCriteria, error) {
 			return nil, fmt.Errorf("no operator")
 		}
 	}
-	fc := &FieldCriteria{}
+	fc := &types.FieldCriteria{}
 	fc.FieldName = a[0]
 	fc.Value = a[1]
 	namelen := len(fc.FieldName)
@@ -67,8 +69,8 @@ func ParseFieldCriteria(str string, eventType string) (*FieldCriteria, error) {
 	return fc,nil
 }
 
-func EventFromRow(id int, row []string) ExpectedEvent {
-	obj := ExpectedEvent{}
+func EventFromRow(id int, row []string) types.ExpectedEvent {
+	obj := types.ExpectedEvent{}
 	obj.Id = string(id)
 	obj.EventType = row[1] //strings.ToTitle(strings.ToLower(row[1]))
 	idx := 2
@@ -96,118 +98,14 @@ func EventFromRow(id int, row []string) ExpectedEvent {
 	return obj
 }
 
-func CorrelationFromRow(row []string) CorrelationRow {
-	obj := CorrelationRow{}
+func CorrelationFromRow(row []string) types.CorrelationRow {
+	obj := types.CorrelationRow{}
 	obj.Type = row[1]
 	obj.SubType = row[2]
 	for i := 3; i < len(row); i++ {
 		obj.EventIndexes = append(obj.EventIndexes, row[i])
 	}
 	return obj
-}
-
-func LoadFile(filename string) (error) {
-	var cur *AtomicTestCriteria
-
-	data, err := ioutil.ReadFile(filename);
-	if err != nil {
-		return err
-	}
-
-	r := csv.NewReader(bytes.NewReader(data))
-	r.LazyQuotes = true
-	r.Comment = '#'
-	r.FieldsPerRecord = -1 // no validation on num columns per row
-
-	records, err := r.ReadAll()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _,row := range records {
-
-		if 3 != len(row[0]) {
-
-			if len(row[0]) < 3 {
-				continue
-			}
-			if row[0][0] == '#' {
-				continue
-			}
-			if row[0][0] == 'T' {
-				// new test
-				//fmt.Println("new test", row[0], )
-				if len(row) != 4 {
-					fmt.Println("ERROR: Expected 4 columns for T row", row)
-					continue
-				}
-				cur = AtomicTestCriteriaNew(row[0], row[1], row[2], row[3])
-				gRecs = append(gRecs , cur)
-				//cur = gRecs[len(gRecs)-1]
-			} else {
-				fmt.Println("UNKNOWN", row[0])
-			}
-		} else {
-			switch row[0] {
-			case "_E_":
-				evt := EventFromRow(len(cur.ExpectedEvents),row)
-				//fmt.Println("_E_", evt)
-				cur.ExpectedEvents = append(cur.ExpectedEvents, &evt)
-			case "_?_":
-				evt := EventFromRow(len(cur.ExpectedEvents),row)
-				evt.IsMaybe = true
-				//fmt.Println("_E_", evt)
-				cur.ExpectedEvents = append(cur.ExpectedEvents, &evt)
-			case "_C_":
-				cur.ExpectedCorrelations = append(cur.ExpectedCorrelations, CorrelationFromRow(row))
-			case "ARG":
-				cur.Args[row[1]] = row[2]
-			case "FYI":
-				cur.Infos = append(cur.Infos,row[1])
-			case "!!!":
-				cur.Warnings = append(cur.Warnings,row[1])
-			default:
-				fmt.Println("ENTRY", row[0])
-			}
-		}
-	}
-	return nil
-}
-
-func LoadTechniquesList(filename string) (error) {
-
-	data, err := ioutil.ReadFile(filename);
-	if err != nil {
-		return err
-	}
-
-	r := csv.NewReader(bytes.NewReader(data))
-	r.LazyQuotes = true
-	r.FieldsPerRecord = -1 // no validation on num columns per row
-
-	records, err := r.ReadAll()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	for _,row := range records {
-		//fmt.Println(row)
-
-		tid := row[0]
-		if len(tid) == 0 || tid[0] != 'T' {
-			continue
-		}
-
-		num := AddTestsForTechniqueUsingAtomicsIndex(tid)
-		if num == 0 {
-			if gVerbose {
-				fmt.Println("ERROR: no tests found for technique",tid)
-			}
-			gTechniquesMissingTests = append(gTechniquesMissingTests, tid)
-		}
-	}
-
-	return nil
 }
 
 /*
@@ -241,13 +139,13 @@ func LoadMitreTechniqueCsv(path string, dest *map[string]string) error {
 	return nil
 }
 
-func LoadAtomicsIndexCsv() error {
+func LoadAtomicsIndexCsv(atomicsPath string, dest *map[string][]*types.TestSpec) error {
 
 	var path string
 	if runtime.GOOS == "darwin" { // macOS 
-		path = flagAtomicsPath + "/Indexes/Indexes-CSV/macos-index.csv"
+		path = atomicsPath + "/Indexes/Indexes-CSV/macos-index.csv"
 	} else {
-		path = flagAtomicsPath + "/Indexes/Indexes-CSV/linux-index.csv"
+		path = atomicsPath + "/Indexes/Indexes-CSV/linux-index.csv"
 	}
 	
 	data, err := ioutil.ReadFile(path);
@@ -272,17 +170,17 @@ func LoadAtomicsIndexCsv() error {
 		if len(row) < 6 || len(row[0])==0 || row[0][0] == '#' {
 			continue
 		}
-		spec := &TestSpec {}
+		spec := &types.TestSpec {}
 
 		spec.Technique = row[1]
 		spec.TestIndex = row[3]
 		spec.TestName = row[4]
 
-		_,ok := gAtomicTests[spec.Technique]
+		_,ok := (*dest)[spec.Technique]
 		if !ok {
-			gAtomicTests[spec.Technique] = []*TestSpec{}
+			(*dest)[spec.Technique] = []*types.TestSpec{}
 		}
-		gAtomicTests[spec.Technique] = append(gAtomicTests[spec.Technique], spec)
+		(*dest)[spec.Technique] = append((*dest)[spec.Technique], spec)
 	}
 	return nil
 }
@@ -361,14 +259,14 @@ func LoadServerConfigsCsv(path string, dest *map[string]string) error {
 	return nil
 }
 
-func LoadAtomicDefaultArgs(criteria *AtomicTestCriteria) {
+func LoadAtomicDefaultArgs(criteria *types.AtomicTestCriteria, flagAtomicsPath string, isVerbose bool) {
 	var body []byte
 
 	// Check to see if test is defined locally first. If not, body will be nil
 	// and the test will be loaded below.
 	atomicsPath,_ := filepath.Abs(flagAtomicsPath)
 	path := atomicsPath + "/" + criteria.Technique + "/" + criteria.Technique + ".yaml"
-	if gVerbose {
+	if isVerbose {
 		fmt.Println("loading",path)
 	}
 	body, _ = os.ReadFile(path)
@@ -383,7 +281,7 @@ func LoadAtomicDefaultArgs(criteria *AtomicTestCriteria) {
 		return
 	}
 
-	var atoms Atomic
+	var atoms types.Atomic
 
 	if err := yaml.Unmarshal(body, &atoms); err != nil {
 		fmt.Println("processing Atomic Test YAML file", err)
@@ -397,7 +295,7 @@ func LoadAtomicDefaultArgs(criteria *AtomicTestCriteria) {
 		if ok {
 			continue // we have override value
 		}
-		if gVerbose {
+		if isVerbose {
 			fmt.Printf("  Loading default arg %s:'%s'\n",name,obj.Default)
 		}
 
@@ -408,8 +306,8 @@ func LoadAtomicDefaultArgs(criteria *AtomicTestCriteria) {
 	}
 }
 
-func LoadFailedTechniquesList(prevResultsDir string) error {
-	results := []TestProgress{}
+func LoadFailedTechniquesList(prevResultsDir string, dest *[]*types.TestSpec) error {
+	results := []types.TestProgress{}
 
 	path := prevResultsDir
 	if !strings.HasSuffix(path,".json") {
@@ -430,16 +328,16 @@ func LoadFailedTechniquesList(prevResultsDir string) error {
 	}
 
 	for _,entry := range results {
-		if entry.Status == StatusValidateSuccess || entry.Status == StatusSkipped {
+		if entry.Status == types.StatusValidateSuccess || entry.Status == types.StatusSkipped {
 			continue
 		}
-		spec := &TestSpec {}
+		spec := &types.TestSpec {}
 
 		spec.Technique = entry.Technique
 		spec.TestIndex = entry.TestIndex
 		spec.TestName = entry.TestName
 
-		gTestSpecs = append(gTestSpecs, spec)
+		(*dest) = append((*dest), spec)
 	}
 	return nil
 }
