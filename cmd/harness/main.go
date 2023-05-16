@@ -165,7 +165,7 @@ func FillInToolPathDefaults() {
 		flagGoArtRunnerPath = cwd + "/../goartrun/bin/goartrun"
 	}
 	if flagTelemetryToolPath == "" {
-		flagTelemetryToolPath = cwd + "/../telemcat/telemcat"
+		flagTelemetryToolPath = "./telemtool"  // symlink to path of actual binary ?
 	}	
 }
 
@@ -513,7 +513,7 @@ func LaunchTelemetryExtractor(testRun *SingleTestRun) {
 
 	// TODO: build command-line from config
 
-	cmd := exec.Command(flagTelemetryToolPath,"--validate", outPath, "--atomictemp",testRun.workingDir, "--unbatch", "--resultsdir",testRun.resultsDir,"--duration","65", "--ts", fmt.Sprintf("%d,%d", testRun.StartTime, testRun.EndTime))
+	cmd := exec.Command(flagTelemetryToolPath,"--fetch", "--resultsdir", testRun.resultsDir, "--ts", fmt.Sprintf("%d,%d", testRun.StartTime, testRun.EndTime))
 
 	fmt.Println("launching ",cmd.String())
 	output, err := cmd.CombinedOutput()
