@@ -1,4 +1,4 @@
-package main
+package types
 
 /**
  * Structs defining the simplified event schema that allows

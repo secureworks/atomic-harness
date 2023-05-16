@@ -1,4 +1,4 @@
-package main
+package types
 
 // RunSpec - schema for goartrun job
 type RunSpec struct {
@@ -71,4 +71,24 @@ func (s TestStatus) String() string {
     }
 
     return strings[s]
+}
+
+// TestSpec - schema summarizing atomic-validation-criteria for test(s)
+// for example, it could be all tests for "T1027"
+type TestSpec struct {
+    Technique        string
+    TestIndex        string  // optional?
+    TestName         string  // optional?
+
+    Criteria         []*AtomicTestCriteria
+}
+
+type TestProgress struct {
+    Technique        string
+    TestIndex        string  // optional?
+    TestName         string  // optional?
+
+    State      TestState
+    ExitCode   int
+    Status     TestStatus
 }

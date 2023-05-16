@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
-func GetSysInfo(dest *SysInfoVars) error {
+func GetSysInfo(dest *types.SysInfoVars) error {
 	err := GetIpAddrs(dest)
 	if err != nil {
 		return err
@@ -19,7 +21,7 @@ func GetSysInfo(dest *SysInfoVars) error {
 	return nil
 }
 
-func GetHostname(dest *SysInfoVars) {
+func GetHostname(dest *types.SysInfoVars) {
 	cmd := exec.Command("hostname")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -29,7 +31,7 @@ func GetHostname(dest *SysInfoVars) {
 	dest.Hostname = strings.TrimSpace(string(output))
 }
 
-func GetIpAddrs(dest *SysInfoVars) error {
+func GetIpAddrs(dest *types.SysInfoVars) error {
 	cmd := exec.Command("ip","addr")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -49,7 +51,7 @@ func GetIpAddrs(dest *SysInfoVars) error {
 	return nil
 }
 
-func GetEnvInfo(dest *SysInfoVars) {
+func GetEnvInfo(dest *types.SysInfoVars) {
 	// these are set on ubuntu linux bash
 	dest.Username = os.Getenv("SUDO_USER")  // harness is supposed to be run using sudo
 	if len(dest.Hostname) == 0 {
@@ -58,7 +60,7 @@ func GetEnvInfo(dest *SysInfoVars) {
 }
 
 // rather than getting actual values, this uses Ipaddr4 and assumes
-func LazyGatewaySubnet(dest *SysInfoVars) {
+func LazyGatewaySubnet(dest *types.SysInfoVars) {
 	if dest.Ipaddr4 == "" {
 		return
 	}
@@ -67,7 +69,7 @@ func LazyGatewaySubnet(dest *SysInfoVars) {
 	dest.Gateway = dest.Subnet + ".1"
 }
 
-func ParseIpAddrOutput(dest *SysInfoVars, s string) {
+func ParseIpAddrOutput(dest *types.SysInfoVars, s string) {
 	a := strings.SplitN(s,"\n",100)
 	currentIf := ""
 	for _,line := range a {

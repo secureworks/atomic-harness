@@ -4,17 +4,17 @@ import (
 	"bufio"
 	"fmt"
 	"encoding/json"
-	//"net"
 	"os"
 	"regexp"
 	"strings"
 
+	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
 type ExtractState struct {
 	StartTime   uint64            `json:"start_time"`
 	EndTime     uint64            `json:"end_time"`
-	TestData    MitreTestCriteria `json:"test_data"`
+	TestData    types.MitreTestCriteria `json:"test_data"`
 	TotalEvents uint64            `json:"total_events"`
 	NumMatches  uint64            `json:"num_matches"`
 	Coverage    float64           `json:"coverage"`
@@ -50,13 +50,13 @@ func CheckMatch(haystack,op,needle string) bool {
 	return false
 }
 
-func AddMatchingEvent(testRun *SingleTestRun, exp *ExpectedEvent, nativeJsonStr string) {
+func AddMatchingEvent(testRun *SingleTestRun, exp *types.ExpectedEvent, nativeJsonStr string) {
 	exp.Matches = append(exp.Matches, nativeJsonStr)
 	gValidateState.NumMatches += 1
 	UpdateCoverage()
 }
 
-func CheckProcessEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr string) {
+func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) {
 
 	// by default, filter out anything that is not in the actual ATR test
 	// by looking for goartrun 'test' shell process event
@@ -110,7 +110,7 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr s
 	}
 }
 
-func CheckFileEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr string) {
+func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) {
 	if flagFilterFileEventsTmp {
 		if IsGoArtWorkDirEvent(testRun, evt) {
 			return
@@ -136,25 +136,25 @@ func CheckFileEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr stri
 
 		switch strings.ToUpper(exp.SubType) {
 		case "WRITE":
-			isMatchingSubtype = action == SimpleFileActionOpenWrite || action == SimpleFileActionRename || action == SimpleFileActionCreate
+			isMatchingSubtype = action == types.SimpleFileActionOpenWrite || action == types.SimpleFileActionRename || action == types.SimpleFileActionCreate
 		case "CREAT":
-			isMatchingSubtype = action == SimpleFileActionOpenWrite || action == SimpleFileActionCreate
+			isMatchingSubtype = action == types.SimpleFileActionOpenWrite || action == types.SimpleFileActionCreate
 		case "CREATE":
-			isMatchingSubtype = action == SimpleFileActionOpenWrite || action == SimpleFileActionCreate
+			isMatchingSubtype = action == types.SimpleFileActionOpenWrite || action == types.SimpleFileActionCreate
 		case "CHMOD":
-			isMatchingSubtype = action == SimpleFileActionChmod
+			isMatchingSubtype = action == types.SimpleFileActionChmod
 		case "CHOWN":
-			isMatchingSubtype = action == SimpleFileActionChown
+			isMatchingSubtype = action == types.SimpleFileActionChown
 		case "CHATTR":
-			isMatchingSubtype = action == SimpleFileActionChattr
+			isMatchingSubtype = action == types.SimpleFileActionChattr
 		case "RENAME":
-			isMatchingSubtype = action == SimpleFileActionRename
+			isMatchingSubtype = action == types.SimpleFileActionRename
 		case "UNLINK":
-			isMatchingSubtype = action == SimpleFileActionDelete
+			isMatchingSubtype = action == types.SimpleFileActionDelete
 		case "DELETE":
-			isMatchingSubtype = action == SimpleFileActionDelete
+			isMatchingSubtype = action == types.SimpleFileActionDelete
 		case "READ":
-			isMatchingSubtype = action == SimpleFileActionOpenRead
+			isMatchingSubtype = action == types.SimpleFileActionOpenRead
 		default:
 			fmt.Println("Unsupported FileMod subtype for matching:", exp.SubType)
 		}
@@ -190,7 +190,7 @@ func CheckFileEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr stri
 	}
 }
 
-func CheckNetflowEvent(testRun *SingleTestRun, evt *SimpleEvent, nativeJsonStr string) {
+func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) {
 	for _,exp := range gValidateState.TestData.ExpectedEvents {
 
 		if strings.ToUpper(exp.EventType) != "NETFLOW" {
@@ -269,7 +269,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 	}
 
 	for i, line := range simpleLines {
-		evt := &SimpleEvent{}
+		evt := &types.SimpleEvent{}
 
 		err = json.Unmarshal([]byte(line), evt)
 		if err != nil {
@@ -277,13 +277,13 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 			continue
 		}
 		switch evt.EventType {
-		case SimpleSchemaProcess:
+		case types.SimpleSchemaProcess:
 			CheckProcessEvent(testRun, evt, rawJsonLines[i])
-		case SimpleSchemaFilemod:
+		case types.SimpleSchemaFilemod:
 			CheckFileEvent(testRun, evt, rawJsonLines[i])
-		case SimpleSchemaFileRead:
+		case types.SimpleSchemaFileRead:
 			CheckFileEvent(testRun, evt, rawJsonLines[i])
-		case SimpleSchemaNetflow:
+		case types.SimpleSchemaNetflow:
 			CheckNetflowEvent(testRun, evt, rawJsonLines[i])
 		default:
 			fmt.Println("missing handling of type", line)
@@ -314,11 +314,11 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 	// set status based on coverage
 
 	if gValidateState.Coverage == 1.0 {
-		testRun.status = StatusValidateSuccess
+		testRun.status = types.StatusValidateSuccess
 	} else if gValidateState.Coverage == 0.0 {
-		testRun.status = StatusValidateFail
+		testRun.status = types.StatusValidateFail
 	} else {
-		testRun.status = StatusValidatePartial
+		testRun.status = types.StatusValidatePartial
 	}
 }
 
@@ -347,7 +347,7 @@ func UpdateCoverage() {
 	}
 }
 
-func GetTelemChar(exp *ExpectedEvent) string {
+func GetTelemChar(exp *types.ExpectedEvent) string {
 	switch strings.ToUpper(exp.EventType) {
 	case "PROCESS": return "P"
 	case "NETFLOW": return "N"
@@ -420,11 +420,11 @@ func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
  *
  * Side-effects: will set testRun.TimeWorkDirCreate, TimeWorkDirDelete
  */
-func IsGoArtWorkDirEvent(testRun *SingleTestRun, evt *SimpleEvent) bool {
+func IsGoArtWorkDirEvent(testRun *SingleTestRun, evt *types.SimpleEvent) bool {
 	if evt.FileFields.TargetPath == testRun.workingDir {
-		if evt.FileFields.Action == SimpleFileActionDelete {
+		if evt.FileFields.Action == types.SimpleFileActionDelete {
 			testRun.TimeWorkDirDelete = evt.Timestamp
-		} else if evt.FileFields.Action == SimpleFileActionOpenRead {
+		} else if evt.FileFields.Action == types.SimpleFileActionOpenRead {
 			return false
 		} else {
 			testRun.TimeWorkDirCreate = evt.Timestamp
@@ -440,7 +440,7 @@ func IsGoArtWorkDirEvent(testRun *SingleTestRun, evt *SimpleEvent) bool {
  * e.g. "P<f>F<N>" would represent Process and FileMod
  *      found, but file-read and netflow not found
  */
-func GetTelemTypes(criteria *MitreTestCriteria) string {
+func GetTelemTypes(criteria *types.MitreTestCriteria) string {
 	s := ""
 	for _,exp := range criteria.ExpectedEvents {
 		c := GetTelemChar(exp)

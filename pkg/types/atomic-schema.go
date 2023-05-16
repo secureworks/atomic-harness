@@ -1,4 +1,4 @@
-package main
+package types
 
 // See https://github.com/redcanaryco/atomic-red-team/blob/master/atomic_red_team/atomic_test_template.yaml
 // and https://github.com/redcanaryco/atomic-red-team/blob/master/atomic_red_team/spec.yaml
