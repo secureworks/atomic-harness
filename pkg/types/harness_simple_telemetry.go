@@ -73,6 +73,10 @@ type SimpleNetflowFields struct {
     FlowStr         string     `json:"flow_str,omitempty"`   // proto:ip:port->ip:port
     FlowStrDns      string     `json:"flow_dns,omitempty"`   // proto:ip:port->host:port
     Flags           string     `json:"flags,omitempty"`      // "SE" - IsStart, IsEnd
+
+    Pid             int64      `json:"pid,omitempty"`
+    UniquePid       string     `json:"unique_pid,omitempty"`
+    ExePath         string     `json:"exe_path,omitempty"`
 }
 
 type SimpleEvent struct {
