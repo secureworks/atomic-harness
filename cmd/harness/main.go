@@ -154,6 +154,8 @@ func FillInToolPathDefaults() {
 		flagCriteriaPath = cwd + "/../atomic-validation-criteria/"
 		if runtime.GOOS == "darwin" { // macOS 
 			flagCriteriaPath += "macos"
+		} else if runtime.GOOS == "windows" {
+			flagCriteriaPath += "windows"
 		} else {
 			flagCriteriaPath += "linux"
 		}
@@ -162,11 +164,19 @@ func FillInToolPathDefaults() {
 		flagAtomicsPath = cwd + "/../atomic-red-team/atomics"
 	}
 	if flagGoArtRunnerPath == "" {
-		flagGoArtRunnerPath = cwd + "/../goartrun/bin/goartrun"
+		if runtime.GOOS == "windows" {
+			flagGoArtRunnerPath = cwd + "/../goartrun/bin/goartrun.exe"
+		} else {
+			flagGoArtRunnerPath = cwd + "/../goartrun/bin/goartrun"
+		}
 	}
 	if flagTelemetryToolPath == "" {
 		flagTelemetryToolPath = "./telemtool"  // symlink to path of actual binary ?
 	}	
+	flagCriteriaPath = filepath.FromSlash(flagCriteriaPath)
+	flagAtomicsPath = filepath.FromSlash(flagAtomicsPath)
+	flagGoArtRunnerPath = filepath.FromSlash(flagGoArtRunnerPath)
+	flagTelemetryToolPath = filepath.FromSlash(flagTelemetryToolPath)
 }
 
 func MissingCmdlineArgs() bool {
@@ -235,6 +245,7 @@ func MissingCmdlineArgs() bool {
 }
 
 func LoadCriteriaFiles(dirPath string) bool {
+	dirPath = filepath.FromSlash(dirPath)
 	allfiles, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		fmt.Println("ERROR: unable to list files in " + dirPath, err)
@@ -249,9 +260,9 @@ func LoadCriteriaFiles(dirPath string) bool {
 			fmt.Println("Loading " + f.Name())
 		}
 
-		err := LoadFile(dirPath + "/" + f.Name())
+		err := LoadFile(filepath.FromSlash(dirPath + "/" + f.Name()))
 		if err != nil {
-			fmt.Println("ERROR:", err);
+			fmt.Println("ERROR:", err)
 			return false
 		}
 	}
@@ -476,7 +487,7 @@ func SubstituteVarsInCriteria(criteria *types.AtomicTestCriteria) bool {
 
 func ClearTelemetryCache() {
 	// TODO: build command-line from config
-	cmd := exec.Command(flagTelemetryToolPath,"--clearcache")
+	cmd := exec.Command(filepath.FromSlash(flagTelemetryToolPath),"--clearcache")
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -490,7 +501,7 @@ func ClearTelemetryCache() {
 
 func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 
-	cmd := exec.Command(flagTelemetryToolPath,"--fetch", "--resultsdir", resultsDir, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
+	cmd := exec.Command(filepath.FromSlash(flagTelemetryToolPath),"--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 
 	fmt.Println("launching ",cmd.String())
 	output, err := cmd.CombinedOutput()
@@ -505,7 +516,7 @@ func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 		fmt.Println("  telemetry tool err:", err)
 	}
 	if len(output) != 0 {
-		outPath := resultsDir + "/telemetry_tool_output.txt"
+		outPath := filepath.FromSlash(resultsDir + "/telemetry_tool_output.txt")
 		err = os.WriteFile(outPath, output, 0644)
 		if err != nil {
 			fmt.Println("ERROR: unable to write file", outPath, err)
@@ -514,7 +525,7 @@ func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 }
 
 func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
-	path := testRun.resultsDir + "/run_summary.json"
+	path := filepath.FromSlash(testRun.resultsDir + "/run_summary.json")
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if gVerbose {
@@ -534,11 +545,44 @@ func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
 
 // echo runSpecJson | ./bin/goart --config - 
 
-func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
+func GoArtRunTestWin(testRun *SingleTestRun, runSpecJson string) {
 
+	runSpecJson = filepath.FromSlash(runSpecJson)
 	fmt.Printf("Running test %s #%d \"%s\"\n",testRun.criteria.Technique, testRun.criteria.TestIndex, testRun.criteria.TestName)
 
-	cmd := exec.Command(flagGoArtRunnerPath,"--config","-")
+	cmd := exec.Command(filepath.FromSlash(flagGoArtRunnerPath),"--config", runSpecJson)
+	fmt.Println(cmd.String())
+	//TODO : cmd.Env = append(os.Environ(), env...)
+
+	// launch shell
+
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		fmt.Errorf("  runner error: %w", err)
+	} else {
+		fmt.Println("  runner finished without error")
+	}
+
+	// write shell stdout to file
+
+	outPath := filepath.FromSlash(testRun.resultsDir + "/runner-stdout.txt")
+	err = os.WriteFile(outPath, output, 0644)
+	if err != nil {
+		fmt.Println("ERROR: unable to write file", outPath, err)
+	}
+
+
+	testRun.exitCode = cmd.ProcessState.ExitCode()
+	testRun.status = types.TestStatus(testRun.exitCode)
+	fmt.Printf("runner exited with code %d %s\n",testRun.exitCode,testRun.status)
+}
+
+func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
+
+	runSpecJson = filepath.FromSlash(runSpecJson)
+	fmt.Printf("Running test %s #%d \"%s\"\n",testRun.criteria.Technique, testRun.criteria.TestIndex, testRun.criteria.TestName)
+
+	cmd := exec.Command(filepath.FromSlash(flagGoArtRunnerPath),"--config","-")
 
 	dest, err := cmd.StdinPipe()
 	if err != nil {
@@ -561,7 +605,7 @@ func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
 
 	// write shell stdout to file
 
-	outPath := testRun.resultsDir + "/runner-stdout.txt"
+	outPath := filepath.FromSlash(testRun.resultsDir + "/runner-stdout.txt")
 	err = os.WriteFile(outPath, output, 0644)
 	if err != nil {
 		fmt.Println("ERROR: unable to write file", outPath, err)
@@ -573,7 +617,7 @@ func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
 	fmt.Printf("runner exited with code %d %s\n",testRun.exitCode,testRun.status)
 }
 
-/**
+/** WIN: might cause errors
  * Look at test Inputs (from criteria []ARG) and
  * substitute any that begin with '$' character
  * @return true if all substituions were met
@@ -635,10 +679,12 @@ func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsD
 	obj := types.RunSpec{}
 	obj.Technique = spec.Technique
 	obj.TestIndex = int(spec.TestIndex - 1)
-	obj.TempDir = atomicTempDir
-	obj.AtomicsDir,_ = filepath.Abs(flagAtomicsPath)
-	obj.ResultsDir,_ = filepath.Abs(resultsDir)
-	obj.Inputs = spec.Args
+	obj.TempDir = filepath.FromSlash(atomicTempDir)
+	obj.AtomicsDir,_ = filepath.Abs(filepath.FromSlash(flagAtomicsPath))
+	obj.ResultsDir,_ = filepath.Abs(filepath.FromSlash(resultsDir))
+	if runtime.GOOS != "windows" {
+		obj.Inputs = spec.Args
+	}	
 	obj.Username = flagRegularRunUser
 
 	os.Mkdir(obj.ResultsDir, 0777)
@@ -649,12 +695,15 @@ func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsD
 		return ""
 	}
 
-	outPath := resultsDir + "/runspec.json"
+	outPath := filepath.FromSlash(resultsDir + "/runspec.json")
 	err = os.WriteFile(outPath, j, 0644)
 	if err != nil {
 		fmt.Println("ERROR: unable to write file", outPath, err)
 	}
 
+	if runtime.GOOS == "windows" {
+		return outPath
+	} 
 	return string(j)
 }
 
@@ -667,13 +716,13 @@ func WriteTestRunStatusFile(testRun *SingleTestRun) {
 
 	// load match string written by telemetry tool and update testRun object
 
-	inPath := testRun.resultsDir + "/match_string.txt"
+	inPath := filepath.FromSlash(testRun.resultsDir + "/match_string.txt")
 	matchString,_ := os.ReadFile(inPath)
 	testRun.matchString = string(matchString)
 
 	// save status file
 
-	outPath := testRun.resultsDir + "/status.txt"
+	outPath := filepath.FromSlash(testRun.resultsDir + "/status.txt")
 	s := fmt.Sprintf("%d\n%s",testRun.status, testRun.status)
 	err := os.WriteFile(outPath, []byte(s), 0644)
 	if err != nil {
@@ -700,7 +749,7 @@ func SaveState(tests []*SingleTestRun) {
 		return
 	}
 
-	outPath := flagResultsPath + "/status.json"
+	outPath := filepath.FromSlash(flagResultsPath + "/status.json")
 
 	err = os.WriteFile(outPath, j, 0644)
 	if err != nil {
@@ -710,7 +759,7 @@ func SaveState(tests []*SingleTestRun) {
 	// now a plain text version
 
 	s := SPrintState(tests, true)
-	outPath = flagResultsPath + "/status.txt"
+	outPath = filepath.FromSlash(flagResultsPath + "/status.txt")
 
 	err = os.WriteFile(outPath, []byte(s), 0644)
 	if err != nil {
@@ -774,6 +823,7 @@ func SPrintState(tests []*SingleTestRun, byCategory bool) string {
 }
 
 func LoadFile(filename string) (error) {
+	filename = filepath.FromSlash(filename)
 	var cur *types.AtomicTestCriteria
 
 	data, err := ioutil.ReadFile(filename);
@@ -842,7 +892,7 @@ func LoadFile(filename string) (error) {
 }
 
 func LoadTechniquesList(filename string) (error) {
-
+	filename = filepath.FromSlash(filename)
 	data, err := ioutil.ReadFile(filename);
 	if err != nil {
 		return err
@@ -888,7 +938,7 @@ func RunTests() {
 
 		for _, rec := range spec.Criteria {
 
-			resultsDir := flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d",rec.TestIndex)
+			resultsDir := filepath.FromSlash(flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d",rec.TestIndex))
 			err := os.MkdirAll(resultsDir, 0777)
 			if err != nil {
 				fmt.Println("unable to make results dir", err)
@@ -920,7 +970,7 @@ func RunTests() {
 			testRun.workingDir = workingDir
 
 			// load atomic to get default args
-			utils.LoadAtomicDefaultArgs(rec, flagAtomicsPath, gVerbose)
+			utils.LoadAtomicDefaultArgs(rec, filepath.FromSlash(flagAtomicsPath), gVerbose)
 
 			// some test Args and field checks need variable substitutions
 
@@ -936,15 +986,24 @@ func RunTests() {
 				continue
 			}
 
-			os.Chmod(workingDir, 0777)  // runner cleans up workingDir
-			os.Chmod(resultsDir, 0777)
+			if runtime.GOOS == "windows" {
+				os.Chmod(workingDir, 0600)  
+				os.Chmod(resultsDir, 0600)
+			} else {
+				os.Chmod(workingDir, 0777)  // runner cleans up workingDir
+				os.Chmod(resultsDir, 0777)
+			}
+			
 
 			if !gFlagNoRun	{
 				testRun.state = types.StateRunnerLaunched
 				SaveState(testRuns)
 
-				GoArtRunTest(testRun, runConfig)
-
+				if runtime.GOOS == "windows" {
+					GoArtRunTestWin(testRun, runConfig)
+				} else {
+					GoArtRunTest(testRun, runConfig)
+				}	
 				testRun.state = types.StateRunnerFinished
 
 				UpdateTimestampsFromRunSummary(testRun)
@@ -953,8 +1012,10 @@ func RunTests() {
 			}
 
 			// fix permissions after run
-
-			os.Chmod(resultsDir, 0755)
+			if runtime.GOOS != "windows" {
+				os.Chmod(resultsDir, 0755)
+			}
+			
 
 			// runner will try to clean up, but may not be able to with lowered privs
 			err = os.RemoveAll(workingDir)
@@ -981,12 +1042,12 @@ func RunTests() {
 	endTime := time.Now().Unix()
 
 	// fix ownership of results dirs
-
+	// WIN: Will cause issues
 	username := os.Getenv("SUDO_USER")
 	if username == "" {
 		username = os.Getenv("USER")
 	}
-	if username != "" && username != "root" {
+	if username != "" && username != "root" && runtime.GOOS != "windows" {
 		cmd := exec.Command("chown","-R", username + ":" + username, flagResultsPath)
 		_,err := cmd.CombinedOutput()
 		if err != nil {
@@ -994,7 +1055,10 @@ func RunTests() {
 		}
 	}
 
-	os.Chmod(flagResultsPath, 0755)
+	if runtime.GOOS != "windows" {
+		os.Chmod(flagResultsPath, 0755)
+	}
+	
 
 	// now get telemetry
 	if false == gFlagNoRun && true == gKeepRunning {
@@ -1042,13 +1106,7 @@ func main() {
 
 	FillInToolPathDefaults()
 
-
-	var err error
-	if runtime.GOOS == "darwin" { // macOS
-		err = GetSysInfoMacOS(gSysInfo)
-	} else {
-		err = GetSysInfo(gSysInfo)
-	}
+	err := GetSysInfo(gSysInfo)
 
 	if err != nil {
 		fmt.Println("ERROR getting system info", err)
@@ -1066,29 +1124,35 @@ func main() {
 	if "" == flagResultsPath {
 
 		var err error
-		os.MkdirAll("./testruns",0777)
-		flagResultsPath, err = os.MkdirTemp("./testruns", "harness-results-")
+		os.MkdirAll(filepath.FromSlash("./testruns"),0777)
+		flagResultsPath, err = os.MkdirTemp(filepath.FromSlash("./testruns"), "harness-results-")
 		if err != nil {
 			fmt.Println("unable to make results dir", err)
 			os.Exit(1)
 		}
-		os.Chmod(flagResultsPath,0777)
+		
+		if runtime.GOOS == "windows" {
+			os.Chmod(flagResultsPath,0600)
+		} else {
+			os.Chmod(flagResultsPath,0777)
+		}
+		
 	}
 
-	err = utils.LoadAtomicsIndexCsv(flagAtomicsPath, &gAtomicTests)
+	err = utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &gAtomicTests)
 	if err != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
 		os.Exit(1)
 	}
 
-	utils.LoadMitreTechniqueCsv("./data/linux_techniques.csv", &gMitreTechniqueNames)
+	utils.LoadMitreTechniqueCsv(filepath.FromSlash("./data/linux_techniques.csv"), &gMitreTechniqueNames)
 
 	if false == LoadCriteriaFiles(flagCriteriaPath) {
 		return
 	}
 
 	if len(flagTechniquesFilePath) != 0 {
-		err := LoadTechniquesList(flagTechniquesFilePath)
+		err := LoadTechniquesList(filepath.FromSlash(flagTechniquesFilePath))
 		if err != nil {
 			fmt.Println("unable to read runlist file", err)
 			os.Exit(1)
@@ -1115,7 +1179,7 @@ func main() {
 	}
 
 	if flagServerConfigsCsvPath != "" {
-		utils.LoadServerConfigsCsv(flagServerConfigsCsvPath, &gServerConfigs)
+		utils.LoadServerConfigsCsv(filepath.FromSlash(flagServerConfigsCsvPath), &gServerConfigs)
 	}
 
 	if false == FindCriteriaForTestSpecs() {
