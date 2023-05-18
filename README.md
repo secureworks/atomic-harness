@@ -1,6 +1,7 @@
 # Atomic Harness
 
-- NOTE: this is for linux and macos only at the moment.
+- **Good News**: The harness and runner now supports Windows and MacOS in addition to Linux!
+- **However**... to make good use of this tool, we need good criteria defined for Windows and MacOS atomic tests.  Help out here: [atomic-validation-criteria](https://github.com/secureworks/atomic-validation-criteria)
 
 ## Overview
 
