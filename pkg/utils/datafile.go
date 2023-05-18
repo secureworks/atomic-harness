@@ -113,7 +113,7 @@ func CorrelationFromRow(row []string) types.CorrelationRow {
  * Populates dest with TechniqueId-Name
  */
 func LoadMitreTechniqueCsv(path string, dest *map[string]string) error {
-	data, err := ioutil.ReadFile(path);
+	data, err := ioutil.ReadFile(filepath.FromSlash(path))
 	if err != nil {
 		return err
 	}

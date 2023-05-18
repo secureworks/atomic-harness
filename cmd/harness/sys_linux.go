@@ -1,3 +1,5 @@
+// +build linux
+
 package main
 
 // routines to get system details for ARG variable substitution

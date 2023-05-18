@@ -1,3 +1,5 @@
+// +build darwin
+
 package main
 
 // routines to get system details for ARG variable substitution
@@ -48,7 +50,7 @@ var gSubnetMaskMappings = map[string]string{
 	"0xffffffff": "255.255.255.255",
 }
 
-func GetSysInfoMacOS(dest *types.SysInfoVars) error {
+func GetSysInfo(dest *types.SysInfoVars) error {
 	err := GetIpInfo(dest)
 	if err != nil {
 		return err
