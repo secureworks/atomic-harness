@@ -617,7 +617,7 @@ func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
 	fmt.Printf("runner exited with code %d %s\n",testRun.exitCode,testRun.status)
 }
 
-/** WIN: might cause errors
+/**
  * Look at test Inputs (from criteria []ARG) and
  * substitute any that begin with '$' character
  * @return true if all substituions were met
@@ -682,9 +682,7 @@ func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsD
 	obj.TempDir = filepath.FromSlash(atomicTempDir)
 	obj.AtomicsDir,_ = filepath.Abs(filepath.FromSlash(flagAtomicsPath))
 	obj.ResultsDir,_ = filepath.Abs(filepath.FromSlash(resultsDir))
-	if runtime.GOOS != "windows" {
-		obj.Inputs = spec.Args
-	}	
+	obj.Inputs = spec.Args
 	obj.Username = flagRegularRunUser
 
 	os.Mkdir(obj.ResultsDir, 0777)
@@ -1042,7 +1040,6 @@ func RunTests() {
 	endTime := time.Now().Unix()
 
 	// fix ownership of results dirs
-	// WIN: Will cause issues
 	username := os.Getenv("SUDO_USER")
 	if username == "" {
 		username = os.Getenv("USER")
@@ -1056,6 +1053,7 @@ func RunTests() {
 	}
 
 	if runtime.GOOS != "windows" {
+		username = os.Getenv("USERNAME")
 		os.Chmod(flagResultsPath, 0755)
 	}
 	
