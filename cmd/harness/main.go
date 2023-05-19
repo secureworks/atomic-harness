@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -123,7 +124,11 @@ func ParseTestSpecs(techniques []string) bool {
 			a := strings.SplitN(str,"#",2)
 			spec := &types.TestSpec{}
 			spec.Technique = a[0]
-			spec.TestIndex = a[1]
+			if len(a[1]) >= 8 {
+				spec.TestGuid = a[1]
+			} else {
+				spec.TestIndex = a[1]
+			}
 			// TODO: validate TestIndex is uint >= 1
 			gTestSpecs = append(gTestSpecs, spec)
 
@@ -244,7 +249,7 @@ func MissingCmdlineArgs() bool {
 	return false
 }
 
-func LoadCriteriaFiles(dirPath string) bool {
+func LoadCriteriaFiles(dirPath string, atomicMap *map[string][]*types.TestSpec) bool {
 	dirPath = filepath.FromSlash(dirPath)
 	allfiles, err := ioutil.ReadDir(dirPath)
 	if err != nil {
@@ -260,7 +265,7 @@ func LoadCriteriaFiles(dirPath string) bool {
 			fmt.Println("Loading " + f.Name())
 		}
 
-		err := LoadFile(filepath.FromSlash(dirPath + "/" + f.Name()))
+		err := LoadFile(filepath.FromSlash(dirPath + "/" + f.Name()), atomicMap)
 		if err != nil {
 			fmt.Println("ERROR:", err)
 			return false
@@ -398,25 +403,30 @@ func FindCriteriaForTestSpecs() bool {
 
 			//fmt.Println("Compare:", rec.Id(), spec)
 
-			if spec.TestIndex == "" {
-				if spec.TestName != "" {
-					if spec.TestName == rec.TestName {
-						AddOnce(spec, rec)
-					}
-				} else {
-					// not specified, so take any and all
+			if len(spec.TestGuid) > 0 && len(rec.TestGuid) > 0 {
+				if strings.HasPrefix(rec.TestGuid, spec.TestGuid) {
 					AddOnce(spec, rec)
 				}
 			} else {
-				if spec.TestIndex == fmt.Sprintf("%d",rec.TestIndex) {
-					if spec.TestName != "" && spec.TestName != rec.TestName {
-						fmt.Println("WARN: detection name does not match:", spec.TestName)
-						fmt.Println("  Det Rule:",rec.Technique,rec.TestIndex,rec.TestName)
+				if spec.TestIndex == "" {
+					if spec.TestName != "" {
+						if spec.TestName == rec.TestName {
+							AddOnce(spec, rec)
+						}
+					} else {
+						// not specified, so take any and all
+						AddOnce(spec, rec)
 					}
-					AddOnce(spec, rec)
+				} else {
+					if spec.TestIndex == fmt.Sprintf("%d",rec.TestIndex) {
+						if spec.TestName != "" && spec.TestName != rec.TestName {
+							fmt.Println("WARN: detection name does not match:", spec.TestName)
+							fmt.Println("  Det Rule:",rec.Technique,rec.TestIndex,rec.TestName)
+						}
+						AddOnce(spec, rec)
+					}
 				}
 			}
-
 		}
 	}
 
@@ -424,6 +434,7 @@ func FindCriteriaForTestSpecs() bool {
 	for _,spec := range gTestSpecs {
 		if len(spec.Criteria) == 0 {
 			if spec.TestIndex == "" && spec.TestName == "" {
+				fmt.Println("FAIL to find atomic tests for ", spec)
 				gTechniquesMissingTests = append(gTechniquesMissingTests, spec.Technique)
 				continue
 			}
@@ -548,7 +559,7 @@ func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
 func GoArtRunTestWin(testRun *SingleTestRun, runSpecJson string) {
 
 	runSpecJson = filepath.FromSlash(runSpecJson)
-	fmt.Printf("Running test %s #%d \"%s\"\n",testRun.criteria.Technique, testRun.criteria.TestIndex, testRun.criteria.TestName)
+	fmt.Printf("Running test %s [%d] %s \"%s\"\n",testRun.criteria.Technique, testRun.criteria.TestIndex, testRun.criteria.TestGuid, testRun.criteria.TestName)
 
 	cmd := exec.Command(filepath.FromSlash(flagGoArtRunnerPath),"--config", runSpecJson)
 	fmt.Println(cmd.String())
@@ -580,7 +591,7 @@ func GoArtRunTestWin(testRun *SingleTestRun, runSpecJson string) {
 func GoArtRunTest(testRun *SingleTestRun, runSpecJson string) {
 
 	runSpecJson = filepath.FromSlash(runSpecJson)
-	fmt.Printf("Running test %s #%d \"%s\"\n",testRun.criteria.Technique, testRun.criteria.TestIndex, testRun.criteria.TestName)
+	fmt.Printf("Running test %s [%d] %s \"%s\"\n",testRun.criteria.Technique, testRun.criteria.TestIndex, testRun.criteria.TestGuid, testRun.criteria.TestName)
 
 	cmd := exec.Command(filepath.FromSlash(flagGoArtRunnerPath),"--config","-")
 
@@ -667,6 +678,7 @@ func SubstituteSysInfoArgs(spec *types.AtomicTestCriteria) bool {
 /*
    Technique  string
    TestName   string
+   TestGuid   string
    TestIndex  int
 
    AtomicsDir string
@@ -678,6 +690,7 @@ func SubstituteSysInfoArgs(spec *types.AtomicTestCriteria) bool {
 func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
 	obj := types.RunSpec{}
 	obj.Technique = spec.Technique
+	obj.TestGuid = spec.TestGuid
 	obj.TestIndex = int(spec.TestIndex - 1)
 	obj.TempDir = filepath.FromSlash(atomicTempDir)
 	obj.AtomicsDir,_ = filepath.Abs(filepath.FromSlash(flagAtomicsPath))
@@ -738,7 +751,7 @@ func SaveState(tests []*SingleTestRun) {
 
 	progress := []types.TestProgress{}
 	for _,t := range tests {
-		obj := types.TestProgress{t.criteria.Technique, fmt.Sprintf("%d",t.criteria.TestIndex), t.criteria.TestName, t.state, t.exitCode, t.status}
+		obj := types.TestProgress{t.criteria.Technique, fmt.Sprintf("%d",t.criteria.TestIndex), t.criteria.TestName, t.criteria.TestGuid, t.state, t.exitCode, t.status}
 		progress = append(progress, obj)
 	}
 	j,err := json.MarshalIndent(progress,"","  ")
@@ -820,7 +833,62 @@ func SPrintState(tests []*SingleTestRun, byCategory bool) string {
 	return s
 }
 
-func LoadFile(filename string) (error) {
+func ToInt64(valstr string) int64 {
+	i, err := strconv.ParseInt(valstr, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return i
+}
+
+func ToUInt(valstr string) uint {
+	i := ToInt64(valstr)
+	return uint(i)
+}
+
+func UpdateCriteriaTestNumGuid(rec *types.AtomicTestCriteria, atomicMap *map[string][]*types.TestSpec) bool {
+	tests, ok := (*atomicMap)[rec.Technique]
+	if !ok {
+		if gVerbose {
+			fmt.Println("An atomic test does not exist for this technique:", rec.Technique, "It could be an old copy of atomic-red-team repo or a fork or the criteria specifies an invalid technique")
+		}
+		return false
+	}
+	for _, tst := range tests {
+		if rec.TestIndex > 0 {
+			if tst.TestIndex != fmt.Sprintf("%d",rec.TestIndex) {
+				continue
+			}
+		} else if len(rec.TestGuid) > 0 {
+			if !strings.HasPrefix(tst.TestGuid, rec.TestGuid) {
+				continue
+			}
+		} else {
+			fmt.Println("criteria is missing Guid or TestNum == 0", rec.Technique, rec.TestIndex, rec.TestGuid, rec.TestName)
+			return false
+		}
+
+		// if criteria is missing a guid or has zero index, fill it in
+
+		if 0 == rec.TestIndex {
+			rec.TestIndex = ToUInt(tst.TestIndex)
+		}
+		if len(rec.TestGuid) == 0 {
+			rec.TestGuid = tst.TestGuid
+		}
+		if rec.TestName != tst.TestName {
+			if (gVerbose) {
+				fmt.Println("criteria name does not match test name:", rec.Technique, rec.TestIndex, rec.TestGuid, rec.TestName, tst.TestName)
+			}
+		}
+		return true
+	}
+
+	return false
+}
+
+
+func LoadFile(filename string, atomicMap *map[string][]*types.TestSpec) (error) {
 	filename = filepath.FromSlash(filename)
 	var cur *types.AtomicTestCriteria
 
@@ -857,6 +925,7 @@ func LoadFile(filename string) (error) {
 					continue
 				}
 				cur = utils.AtomicTestCriteriaNew(row[0], row[1], row[2], row[3])
+				UpdateCriteriaTestNumGuid(cur, atomicMap)
 				gRecs = append(gRecs , cur)
 				//cur = gRecs[len(gRecs)-1]
 			} else {
@@ -928,6 +997,7 @@ func LoadTechniquesList(filename string) (error) {
 
 
 func RunTests() {
+	numTestsRun := 0
 	testRuns := []*SingleTestRun{}
 
 	startTime := time.Now().Unix()
@@ -936,7 +1006,7 @@ func RunTests() {
 
 		for _, rec := range spec.Criteria {
 
-			resultsDir := filepath.FromSlash(flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d",rec.TestIndex))
+			resultsDir := filepath.FromSlash(flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d",rec.TestIndex) + "_" + rec.TestGuid)
 			err := os.MkdirAll(resultsDir, 0777)
 			if err != nil {
 				fmt.Println("unable to make results dir", err)
@@ -1008,6 +1078,7 @@ func RunTests() {
 
 				SaveState(testRuns)
 			}
+			numTestsRun += 1
 
 			// fix permissions after run
 			if runtime.GOOS != "windows" {
@@ -1056,26 +1127,26 @@ func RunTests() {
 		username = os.Getenv("USERNAME")
 		os.Chmod(flagResultsPath, 0755)
 	}
-	
 
 	// now get telemetry
 	if false == gFlagNoRun && true == gKeepRunning {
+		if 0 == numTestsRun {
+			fmt.Println("no tests were run, exiting without looking for telemetry")
+		} else {
+			FetchTelemetry(flagResultsPath, startTime, endTime)
 
-		FetchTelemetry(flagResultsPath, startTime, endTime)
+			for _,testRun := range testRuns {
+				if testRun.status == types.StatusTestSuccess {
+					testRun.state = types.StateWaitForTelemetry
+					SaveState(testRuns)
 
-		for _,testRun := range testRuns {
-			if testRun.status == types.StatusTestSuccess {
-				//spec *AtomicTestCriteria, workingDir string, resultsDir string
-				testRun.state = types.StateWaitForTelemetry
+					ValidateSimpleTelemetry(testRun)
+
+					testRun.state = types.StateDone
+				}
+				WriteTestRunStatusFile(testRun)
 				SaveState(testRuns)
-
-				//LaunchTelemetryExtractor(testRun)
-				ValidateSimpleTelemetry(testRun)
-
-				testRun.state = types.StateDone
 			}
-			WriteTestRunStatusFile(testRun)
-			SaveState(testRuns)
 		}
 	}
 
@@ -1145,7 +1216,7 @@ func main() {
 
 	utils.LoadMitreTechniqueCsv(filepath.FromSlash("./data/linux_techniques.csv"), &gMitreTechniqueNames)
 
-	if false == LoadCriteriaFiles(flagCriteriaPath) {
+	if false == LoadCriteriaFiles(flagCriteriaPath, &gAtomicTests) {
 		return
 	}
 
@@ -1181,7 +1252,7 @@ func main() {
 	}
 
 	if false == FindCriteriaForTestSpecs() {
-                // TODO: optionally support cmdline flag to exit if any criteria files missing
+        // TODO: optionally support cmdline flag to exit if any criteria files missing
 		//return
 	}
 

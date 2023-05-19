@@ -29,10 +29,15 @@ func AtomicTestCriteriaNew(tid string, plat string, numstr string, name string) 
 	obj.TestName = name
 	obj.Args = make(map[string]string)
 
-	val, err := strconv.ParseUint(numstr,10,32)
-	obj.TestIndex = uint(val)
-	if err != nil {
-		fmt.Println("ERROR: TestIndex is not an integer",numstr)
+	if len(numstr) >= 8 {
+		obj.TestGuid = numstr
+	} else {
+		// parse the 1-based test number
+		val, err := strconv.ParseUint(numstr,10,32)
+		obj.TestIndex = uint(val)
+		if err != nil {
+			fmt.Println("ERROR: TestIndex is not an integer",numstr)
+		}
 	}
 	return obj
 }
@@ -175,6 +180,7 @@ func LoadAtomicsIndexCsv(atomicsPath string, dest *map[string][]*types.TestSpec)
 		spec.Technique = row[1]
 		spec.TestIndex = row[3]
 		spec.TestName = row[4]
+		spec.TestGuid = row[5]
 
 		_,ok := (*dest)[spec.Technique]
 		if !ok {
@@ -288,21 +294,33 @@ func LoadAtomicDefaultArgs(criteria *types.AtomicTestCriteria, flagAtomicsPath s
 		return
 	}
 
-	index := criteria.TestIndex - 1
-	testInfo := atoms.AtomicTests[index]
-	for name,obj := range testInfo.InputArugments {
-		_,ok := criteria.Args[name]
-		if ok {
-			continue // we have override value
+	for i, testInfo := range atoms.AtomicTests {
+		if criteria.TestIndex > 0 {
+			if ((criteria.TestIndex-1) != uint(i)) {
+				continue
+			}
+		} else if len(criteria.TestGuid) > 0 {
+			if !strings.HasPrefix(testInfo.GUID, criteria.TestGuid) {
+				continue
+			}
+		} else {
+			fmt.Println("Criteria missing TestNum or TestGuid", criteria.Technique, criteria.TestIndex, criteria.TestGuid)
+			return
 		}
-		if isVerbose {
-			fmt.Printf("  Loading default arg %s:'%s'\n",name,obj.Default)
+		for name,obj := range testInfo.InputArugments {
+			_,ok := criteria.Args[name]
+			if ok {
+				continue // we have override value
+			}
+			if isVerbose {
+				fmt.Printf("  Loading default arg %s:'%s'\n",name,obj.Default)
+			}
+
+			val := strings.ReplaceAll(obj.Default,"$PathToAtomicsFolder",atomicsPath)
+			val = strings.ReplaceAll(val,"PathToAtomicsFolder",atomicsPath)
+
+			criteria.Args[name] = val
 		}
-
-		val := strings.ReplaceAll(obj.Default,"$PathToAtomicsFolder",atomicsPath)
-		val = strings.ReplaceAll(val,"PathToAtomicsFolder",atomicsPath)
-
-		criteria.Args[name] = val
 	}
 }
 

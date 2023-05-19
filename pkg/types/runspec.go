@@ -5,6 +5,7 @@ type RunSpec struct {
    Technique  string
    TestName   string
    TestIndex  int
+   TestGuid   string
 
    AtomicsDir string
    TempDir    string
@@ -79,6 +80,7 @@ type TestSpec struct {
     Technique        string
     TestIndex        string  // optional?
     TestName         string  // optional?
+    TestGuid         string  // optional?
 
     Criteria         []*AtomicTestCriteria
 }
@@ -87,6 +89,7 @@ type TestProgress struct {
     Technique        string
     TestIndex        string  // optional?
     TestName         string  // optional?
+    TestGuid         string  // optional?
 
     State      TestState
     ExitCode   int

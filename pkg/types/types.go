@@ -52,7 +52,9 @@ type MitreTestCriteria struct {
 	Technique        string              `json:"technique"`
 	TestIndex        uint                `json:"test_index"`
 	TestName         string              `json:"test_name"`
-	ExpectedEvents   []*ExpectedEvent     `json:"expected_events"`
+	TestGuid         string              `json:"test_guid"`
+
+	ExpectedEvents       []*ExpectedEvent   `json:"expected_events"`
 	ExpectedCorrelations []*CorrelationRow  `json:"exp_correlations,omitempty"`
 }
 
@@ -68,7 +70,11 @@ type AtomicTestCriteria struct {
 }
 
 func (s *AtomicTestCriteria) Id() string {
-	return s.Technique + "#" + fmt.Sprintf("%d",s.TestIndex)
+	id := fmt.Sprintf("%d",s.TestIndex)
+	if len(s.TestGuid) > 0 {
+		id = s.TestGuid
+	}
+	return s.Technique + "#" + id
 }
 
 // system info for variable substitution
