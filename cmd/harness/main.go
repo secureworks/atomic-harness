@@ -156,14 +156,7 @@ func FillInToolPathDefaults() {
 		cwd = "."
 	}
 	if flagCriteriaPath == "" {
-		flagCriteriaPath = cwd + "/../atomic-validation-criteria/"
-		if runtime.GOOS == "darwin" { // macOS 
-			flagCriteriaPath += "macos"
-		} else if runtime.GOOS == "windows" {
-			flagCriteriaPath += "windows"
-		} else {
-			flagCriteriaPath += "linux"
-		}
+		flagCriteriaPath = cwd + "/../atomic-validation-criteria/" + utils.GetPlatformName()
 	}
 	if flagAtomicsPath == "" {
 		flagAtomicsPath = cwd + "/../atomic-red-team/atomics"
@@ -1187,7 +1180,7 @@ func main() {
 	}
 
 	if flagClearTelemetryCache {
-		ClearTelemetryCache()
+		ClearTelemetryCache() // TODO : call telemtool --prepare <--clearcache>
 	}
 
 	if "" == flagResultsPath {
@@ -1214,11 +1207,19 @@ func main() {
 		os.Exit(1)
 	}
 
+	// TODO: update for each platform
+	// Since there isn't full ATR test coverage, get list of ALL techniques
+	// for the platform.
+
 	utils.LoadMitreTechniqueCsv(filepath.FromSlash("./data/linux_techniques.csv"), &gMitreTechniqueNames)
+
+	// Criteria files contain the expected telemetry details
 
 	if false == LoadCriteriaFiles(flagCriteriaPath, &gAtomicTests) {
 		return
 	}
+
+	// user can specify a list of techniques to execute in a file
 
 	if len(flagTechniquesFilePath) != 0 {
 		err := LoadTechniquesList(filepath.FromSlash(flagTechniquesFilePath))
@@ -1233,6 +1234,8 @@ func main() {
 			os.Exit(2)
 		}
 	}
+
+	// parse list of wild-carded techniques user wants to execute
 
 	if false == ParseTestSpecs(flagTechniques) {
 		//return
@@ -1250,6 +1253,8 @@ func main() {
 	if flagServerConfigsCsvPath != "" {
 		utils.LoadServerConfigsCsv(filepath.FromSlash(flagServerConfigsCsvPath), &gServerConfigs)
 	}
+
+	// get the validation criteria that we have for techniques we are going to run
 
 	if false == FindCriteriaForTestSpecs() {
         // TODO: optionally support cmdline flag to exit if any criteria files missing

@@ -144,14 +144,18 @@ func LoadMitreTechniqueCsv(path string, dest *map[string]string) error {
 	return nil
 }
 
+func GetPlatformName() string {
+	var platform = runtime.GOOS
+	if runtime.GOOS == "darwin" {
+		platform = "macos"
+	}
+	return platform
+}
+
 func LoadAtomicsIndexCsv(atomicsPath string, dest *map[string][]*types.TestSpec) error {
 
 	var path string
-	if runtime.GOOS == "darwin" { // macOS 
-		path = atomicsPath + "/Indexes/Indexes-CSV/macos-index.csv"
-	} else {
-		path = atomicsPath + "/Indexes/Indexes-CSV/linux-index.csv"
-	}
+	path = atomicsPath + "/Indexes/Indexes-CSV/" + GetPlatformName() + "-index.csv"
 	
 	data, err := ioutil.ReadFile(path);
 	if err != nil {

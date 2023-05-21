@@ -3,3 +3,5 @@ atomic-harness-*
 testruns
 /tmp/
 telemtool
+bin/atomic-harness
+bin/atrutil

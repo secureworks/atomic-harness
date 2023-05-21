@@ -35,9 +35,9 @@ make
 ```
 
 ## Run one or more specific tests
-
+You can specify by TestNum (1-based) or Using the first part of the TestGuid
 ```sh
-$ sudo ./atomic-harness --serverscsv ./doc/example_servers_config.csv T1562.004#7 T1562.004#9 T1562.004#10
+$ sudo ./bin/atomic-harness T1562.004#7 T1562.004#9 T1562.004#b2563a4e
 
 ```
 
@@ -48,13 +48,13 @@ In this example, I have a config file containing ip-addresses and ports of a cou
 Note, there are plenty of atomic tests missing, so you will see those get skipped.  
 Specifying a `--username` will run non-elevated-privilege tests as that user.
 ```sh
-$ sudo ./atomic-harness --serverscsv ./doc/example_servers_config.csv --runlist ./data/linux_techniques.csv --username bob
+$ sudo ./bin/atomic-harness --serverscsv ./doc/example_servers_config.csv --runlist ./data/linux_techniques.csv --username bob
 ```
 
 ## Re-Run All Failing Tests From Previous
 If you specify `--retryfailed <path to results dir>`, the harness will re-run all tests that were not `Validated` or `Skipped`.
 ```sh
-sudo ./atomic-harness --telemetryclear --serverscsv ./doc/example_servers_config.csv --username bob --retryfailed ./testruns/harness-results-456317467
+sudo ./bin/atomic-harness --telemetryclear --serverscsv ./doc/example_servers_config.csv --username bob --retryfailed ./testruns/harness-results-456317467
 ```
 
 ## Results Summary
