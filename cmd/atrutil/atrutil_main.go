@@ -24,10 +24,9 @@ import (
 	utils "github.com/secureworks/atomic-harness/pkg/utils"
 )
 
-
-var flagCriteriaPath  string
-var flagAtomicsPath  string
-var flagPlatform  string
+var flagCriteriaPath string
+var flagAtomicsPath string
+var flagPlatform string
 var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
@@ -207,7 +206,7 @@ func FindMatchingTests(val string) {
 			}
 		}
 	}
-	fmt.Println("Found",numMatched,"in",total,"tests for platform", flagPlatform)
+	fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
 }
 
 func FillInToolPathDefaults() {
@@ -322,12 +321,26 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 
 		if err == nil && strings.HasPrefix(row[0], "T") {
 
-			//search the mapping to see if the test exists inside of the full list of atomic tests
-			if atomicMap[row[0]] != nil {
-				fmt.Print("Found Critera for Test ", atomicMap[row[0]], "\n")
-				criteria += 1
-			} else {
-				fmt.Print("Criteria found for a test not found in atomics", row[0], "\n")
+			cur := utils.AtomicTestCriteriaNew(row[0], row[1], row[2], row[3])
+
+			for _, entry := range atomicMap[cur.Technique] {
+				if len(cur.TestGuid) > 0 && strings.HasPrefix(entry.TestGuid, cur.TestGuid) {
+					criteria += 1
+					break
+				}
+				fmt.Print("Current Test Index: ", cur.TestIndex, "\nEntry TestIndex: ", entry.TestIndex, "\n")
+				fmt.Print("Current Test Name: \n", cur.TestName, "\n")
+				entryIndex, err := strconv.ParseUint(entry.TestIndex, 10, 64)
+
+				if err != nil {
+					fmt.Println("failed to parse entry index: ", err)
+					break
+				}
+
+				if cur.TestIndex > 0 && cur.TestIndex == uint(entryIndex) {
+					criteria += 1
+					break
+				}
 			}
 		}
 	}
