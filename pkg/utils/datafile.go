@@ -190,7 +190,21 @@ func LoadAtomicsIndexCsv(atomicsPath string, dest *map[string][]*types.TestSpec)
 		if !ok {
 			(*dest)[spec.Technique] = []*types.TestSpec{}
 		}
-		(*dest)[spec.Technique] = append((*dest)[spec.Technique], spec)
+
+		// The indexes are listed by Tactic, and some techniques appear in more than one.
+		// So filter out duplicates. 65 duplicates found in linux index
+
+		notPresent := true
+		for _,entry := range (*dest)[spec.Technique] {
+			if spec.Technique == entry.Technique && spec.TestGuid == entry.TestGuid {
+				notPresent = false
+				break
+			}
+		}
+		if notPresent {
+			(*dest)[spec.Technique] = append((*dest)[spec.Technique], spec)
+		}
+
 	}
 	return nil
 }

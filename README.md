@@ -41,6 +41,26 @@ $ sudo ./bin/atomic-harness T1562.004#7 T1562.004#9 T1562.004#b2563a4e
 
 ```
 
+## Search for Atomics
+The `atrutil` tool can help search tests
+```
+$ ./bin/atrutil --findtests cron
+T1053.003 1 435057fb-74b1-410e-9403-d81baf194f75 Cron - Replace crontab with referenced file
+T1053.003 2 b7d42afa-9086-4c8a-b7b0-8ea3faa6ebb0 Cron - Add script to all cron subfolders
+T1053.003 3 2d943c18-e74a-44bf-936f-25ade6cccab4 Cron - Add script to /var/spool/cron/crontabs/ folder
+T1036.003 2 a315bfff-7a98-403b-b442-2ea1b255e556 Masquerading as Linux crond process.
+Found 4 in 257 tests for platform linux
+
+$ ./bin/atrutil --findtests T1053
+T1053.002 2 7266d898-ac82-4ec0-97c7-436075d0d08e At - Schedule a job
+T1053.003 1 435057fb-74b1-410e-9403-d81baf194f75 Cron - Replace crontab with referenced file
+T1053.003 2 b7d42afa-9086-4c8a-b7b0-8ea3faa6ebb0 Cron - Add script to all cron subfolders
+T1053.003 3 2d943c18-e74a-44bf-936f-25ade6cccab4 Cron - Add script to /var/spool/cron/crontabs/ folder
+T1053.006 1 f4983098-bb13-44fb-9b2c-46149961807b Create Systemd Service and Timer
+T1053.006 2 3de33f5b-62e5-4e63-a2a0-6fd8808c80ec Create a user level transient systemd service and timer
+T1053.006 3 d3eda496-1fc0-49e9-aff5-3bec5da9fa22 Create a system level transient systemd service and timer
+```
+
 ## Run All Linux Technique Tests
 
 The linux_techniques.csv was generated from https://raw.githubusercontent.com/mitre/cti/ATT%26CK-v12.1/enterprise-attack/enterprise-attack.json .
