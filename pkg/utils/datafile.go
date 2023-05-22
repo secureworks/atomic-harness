@@ -153,9 +153,16 @@ func GetPlatformName() string {
 }
 
 func LoadAtomicsIndexCsv(atomicsPath string, dest *map[string][]*types.TestSpec) error {
+	return LoadAtomicsIndexCsvPlatform(atomicsPath, dest, "")
+}
+
+func LoadAtomicsIndexCsvPlatform(atomicsPath string, dest *map[string][]*types.TestSpec, platform string) error {
 
 	var path string
-	path = atomicsPath + "/Indexes/Indexes-CSV/" + GetPlatformName() + "-index.csv"
+	if len(platform) == 0 {
+		platform = GetPlatformName()
+	}
+	path = atomicsPath + "/Indexes/Indexes-CSV/" + platform + "-index.csv"
 	
 	data, err := ioutil.ReadFile(path);
 	if err != nil {
