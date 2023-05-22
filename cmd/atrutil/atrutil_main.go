@@ -23,6 +23,7 @@ import (
 
 var flagCriteriaPath  string
 var flagAtomicsPath  string
+var flagPlatform  string
 var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
@@ -33,6 +34,7 @@ func init() {
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
 	flag.BoolVar(&gPatchCriteriaRefsMode, "patch_criteria_refs", false, "will update criteria file test numbers with GUIDs")
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
+	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
 }
 
 func ToInt64(valstr string) int64 {
@@ -174,7 +176,7 @@ func PatchCriteriaRefsFiles(dirPath string, atomicMap *map[string][]*types.TestS
 func PatchCriteriaGuids() {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
-	err := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &atomicTests)
+	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
 	if err != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
 		os.Exit(1)
@@ -186,7 +188,7 @@ func PatchCriteriaGuids() {
 func FindMatchingTests(val string) {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
-	err := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &atomicTests)
+	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
 	if err != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
 		os.Exit(1)
@@ -202,7 +204,7 @@ func FindMatchingTests(val string) {
 			}
 		}
 	}
-	fmt.Println("Found",numMatched,"in",total,"tests for platform", utils.GetPlatformName())
+	fmt.Println("Found",numMatched,"in",total,"tests for platform", flagPlatform)
 }
 
 func FillInToolPathDefaults() {
@@ -211,7 +213,7 @@ func FillInToolPathDefaults() {
 		cwd = "."
 	}
 	if flagCriteriaPath == "" {
-		flagCriteriaPath = cwd + "/../atomic-validation-criteria/" + utils.GetPlatformName()
+		flagCriteriaPath = cwd + "/../atomic-validation-criteria/" + flagPlatform
 	}
 	if flagAtomicsPath == "" {
 		flagAtomicsPath = cwd + "/../atomic-red-team/atomics"
@@ -220,6 +222,9 @@ func FillInToolPathDefaults() {
 
 func main() {
 	flag.Parse()
+	if len(flagPlatform) == 0 {
+		flagPlatform = utils.GetPlatformName()
+	}
 
 	FillInToolPathDefaults()
 
