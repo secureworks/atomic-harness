@@ -1,19 +1,22 @@
 package main
 
 import (
-	"bytes"
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"flag"
 	"fmt"
 	"io/ioutil" // TODO: shouldn't need this anymore
+
 	//"log"
 	"os"
 	"path/filepath"
+
 	//"regexp"
 	//"runtime"
 	"strconv"
 	"strings"
+
 	//"syscall"
 	//"time"
 
@@ -21,11 +24,12 @@ import (
 	utils "github.com/secureworks/atomic-harness/pkg/utils"
 )
 
-var flagCriteriaPath  string
-var flagAtomicsPath  string
+var flagCriteriaPath string
+var flagAtomicsPath string
 var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
+var gFindTestCoverage = false
 
 func init() {
 	flag.StringVar(&flagCriteriaPath, "criteriapath", "", "path to folder containing CSV files used to validate telemetry")
@@ -33,6 +37,7 @@ func init() {
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
 	flag.BoolVar(&gPatchCriteriaRefsMode, "patch_criteria_refs", false, "will update criteria file test numbers with GUIDs")
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
+	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 }
 
 func ToInt64(valstr string) int64 {
@@ -58,7 +63,7 @@ func UpdateCriteriaTestNumGuid(rec *types.AtomicTestCriteria, atomicMap *map[str
 	}
 	for _, tst := range tests {
 		if rec.TestIndex > 0 {
-			if tst.TestIndex != fmt.Sprintf("%d",rec.TestIndex) {
+			if tst.TestIndex != fmt.Sprintf("%d", rec.TestIndex) {
 				continue
 			}
 		} else if len(rec.TestGuid) > 0 {
@@ -87,32 +92,29 @@ func UpdateCriteriaTestNumGuid(rec *types.AtomicTestCriteria, atomicMap *map[str
 	return false
 }
 
-
-
-func PatchCriteriaFileRefs(filename string, atomicMap *map[string][]*types.TestSpec) (error) {
+func PatchCriteriaFileRefs(filename string, atomicMap *map[string][]*types.TestSpec) error {
 	filename = filepath.FromSlash(filename)
 	var cur *types.AtomicTestCriteria
 
-	infile,err := os.OpenFile(filename, os.O_RDONLY, 0644)
+	infile, err := os.OpenFile(filename, os.O_RDONLY, 0644)
 	if err != nil {
-		fmt.Println("ERROR: unable to open file",filename, err)
+		fmt.Println("ERROR: unable to open file", filename, err)
 		os.Exit(2)
 	}
 
 	outpath := strings.ReplaceAll(filename, ".csv", "_withguids.csv")
-	outfile,err := os.OpenFile(outpath, os.O_CREATE|os.O_WRONLY, 0644)
+	outfile, err := os.OpenFile(outpath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Println("ERROR: unable to create outfile",outpath, err)
+		fmt.Println("ERROR: unable to create outfile", outpath, err)
 		os.Exit(2)
 	}
 	defer infile.Close()
 	defer outfile.Close()
 	w := csv.NewWriter(outfile)
 
-    scanner := bufio.NewScanner(infile)
-    for scanner.Scan() {
-    	line := scanner.Text()
-
+	scanner := bufio.NewScanner(infile)
+	for scanner.Scan() {
+		line := scanner.Text()
 
 		r := csv.NewReader(bytes.NewReader([]byte(line)))
 		r.LazyQuotes = true
@@ -134,7 +136,7 @@ func PatchCriteriaFileRefs(filename string, atomicMap *map[string][]*types.TestS
 			fmt.Fprintln(outfile, line)
 		}
 	}
-	err =  scanner.Err()
+	err = scanner.Err()
 	if err != nil {
 		fmt.Println("ERROR: unable to read", filename, err)
 	}
@@ -146,10 +148,10 @@ func PatchCriteriaRefsFiles(dirPath string, atomicMap *map[string][]*types.TestS
 	dirPath = filepath.FromSlash(dirPath)
 	allfiles, err := ioutil.ReadDir(dirPath)
 	if err != nil {
-		fmt.Println("ERROR: unable to list files in " + dirPath, err)
+		fmt.Println("ERROR: unable to list files in "+dirPath, err)
 		return false
 	}
-	for _,f := range allfiles {
+	for _, f := range allfiles {
 		if !strings.HasSuffix(f.Name(), ".csv") {
 			continue
 		}
@@ -161,7 +163,7 @@ func PatchCriteriaRefsFiles(dirPath string, atomicMap *map[string][]*types.TestS
 			fmt.Println("Loading " + f.Name())
 		}
 
-		err := PatchCriteriaFileRefs(filepath.FromSlash(dirPath + "/" + f.Name()), atomicMap)
+		err := PatchCriteriaFileRefs(filepath.FromSlash(dirPath+"/"+f.Name()), atomicMap)
 		if err != nil {
 			fmt.Println("ERROR:", err)
 			return false
@@ -202,11 +204,11 @@ func FindMatchingTests(val string) {
 			}
 		}
 	}
-	fmt.Println("Found",numMatched,"in",total,"tests for platform", utils.GetPlatformName())
+	fmt.Println("Found", numMatched, "in", total, "tests for platform", utils.GetPlatformName())
 }
 
 func FillInToolPathDefaults() {
-	cwd,_ := os.Getwd()
+	cwd, _ := os.Getwd()
 	if cwd == "" {
 		cwd = "."
 	}
@@ -216,6 +218,126 @@ func FillInToolPathDefaults() {
 	if flagAtomicsPath == "" {
 		flagAtomicsPath = cwd + "/../atomic-red-team/atomics"
 	}
+}
+
+func FindTestCoverage() (error, float32) {
+	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
+
+	errRead := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &atomicTests)
+	if errRead != nil {
+		fmt.Println("Unable to load Indexes-CSV file for Atomics", errRead)
+		return errRead, 0.0
+	}
+
+	percentage := FindTestCoverageHelper(flagCriteriaPath, &atomicTests)
+
+	return nil, percentage
+}
+
+func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestSpec) float32 {
+	dirPath = filepath.FromSlash(dirPath)
+	allfiles, err := ioutil.ReadDir(dirPath)
+
+	platformName := utils.GetPlatformName()
+	var percentage float32 = 0.0
+
+	readErr := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), atomicMap)
+	if readErr != nil {
+		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
+		os.Exit(1)
+	}
+	total := 0
+
+	criteria := 0
+	for _, entries := range *atomicMap {
+		for range entries {
+			total += 1
+		}
+	}
+	fmt.Println("Found", total, "tests for platform", platformName)
+
+	if err != nil {
+		fmt.Println("ERROR: unable to list files in "+dirPath, err)
+		return 0.0
+	}
+	for _, f := range allfiles {
+		if !strings.HasSuffix(f.Name(), ".csv") {
+			continue
+		}
+
+		if strings.Contains(f.Name(), "_withguids") {
+			continue
+		}
+
+		if gVerbose {
+			fmt.Println("Loading " + f.Name())
+		}
+
+		criteria += FindCoverage(filepath.FromSlash(dirPath+"/"+f.Name()), *atomicMap)
+		if err != nil {
+			fmt.Println("ERROR:", err)
+			return 0.0
+		}
+	}
+
+	percentage = float32(criteria) / float32(total)
+
+	fmt.Printf("Percent coverage for %s: %f%%", platformName, percentage)
+
+	return percentage
+}
+
+func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
+	platformName := utils.GetPlatformName()
+
+	fmt.Printf("finding coverage for %s for platform %s\n", filename, platformName)
+	filename = filepath.FromSlash(filename)
+
+	infile, err := os.OpenFile(filename, os.O_RDONLY, 0644)
+	if err != nil {
+		fmt.Println("ERROR: unable to open file", filename, err)
+		os.Exit(2)
+	}
+
+	defer infile.Close()
+
+	scanner := bufio.NewScanner(infile)
+
+	//define local variable to count number of occurences of criteria for particular tests
+	criteria := 0
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Print(line, "\n")
+
+		r := csv.NewReader(bytes.NewReader([]byte(line)))
+		r.LazyQuotes = true
+		r.Comment = '#'
+		r.FieldsPerRecord = -1 // no validation on num columns per row
+
+		row, err := r.Read()
+
+		if err == nil && strings.HasPrefix(row[0], "T") {
+
+			//search the mapping to see if the test exists inside of the full list of atomic tests
+			if atomicMap[row[0]] != nil {
+				fmt.Print("Found Critera for Test ", atomicMap[row[0]], "\n")
+				criteria += 1
+			} else {
+				fmt.Print("Criteria found for a test not found in atomics", row[0], "\n")
+			}
+		}
+	}
+
+	fmt.Printf("\n===========================================\nTotal number of criteria in %s for %s: %d \n", filename, platformName, criteria)
+	fmt.Print("===========================================\n")
+	// decide if scanner failed to open and display filepath given
+	err = scanner.Err()
+	if err != nil {
+		fmt.Println("ERROR: unable to read ", filename)
+	}
+
+	return criteria
 }
 
 func main() {
@@ -230,6 +352,11 @@ func main() {
 
 	if len(gFindTestVal) > 0 {
 		FindMatchingTests(strings.ToLower(gFindTestVal))
+		return
+	}
+
+	if gFindTestCoverage {
+		FindTestCoverage()
 		return
 	}
 }
