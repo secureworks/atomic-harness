@@ -15,7 +15,7 @@ set CGO_ENABLED=0
 IF "%1" == "clean" (
 	echo cleaning previous executables...
 	for /f tokens^=* %%i in ("dir %~dp0\bin") do echo/ Path: %%~dpi ^| Name: %%~nxi
-	set /p "choice= Are you sure you want to delete ALL files in the bin folder?: " 
+	set /p "choice= Are you sure you want to delete ALL files in the bin folder? (y/n): " 
 	echo choice: '!choice!'
 	IF NOT "!choice!" EQU "y" (
 	echo have a good day^^!
@@ -23,6 +23,30 @@ IF "%1" == "clean" (
 	)
 	DEL "%~dp0\bin\*" /S /Q
 	echo Finished Cleaning.
+	EXIT /B 0
+)
+
+IF "%1" == "" (
+	echo *****************************
+	echo run './make help' to see the allowed functions' 
+	echo *****************************
+	EXIT /B 0
+)
+
+IF "%1" == "help" (
+	echo Please select a file to compile:
+	echo -----------------------------
+	echo ** atomic-harness: ./make atomic-harness	
+	echo ** atrutil: ./make atrutil
+
+	echo -----------------------------
+	echo to compile both: 
+	echo ** ./make all
+
+	echo -----------------------------
+	echo to remove old executables: 
+	echo ** ./make clean
+	echo -----------------------------
 	EXIT /B 0
 )
 
@@ -38,14 +62,6 @@ git log --oneline --decorate > CHANGELOG
 echo Changelog Build Finished
 echo.
 
-IF "%1" == "" (
-	echo Please select a file to compile:
-	echo ** atomic-harness **	
-	echo ** atrutil **	
-	echo ** all ** 
-	echo ** clean **
-	EXIT /B 0
-)
 
   for /F "tokens=2 delims==" %%s in ('set ARCH[') do (
  
@@ -64,7 +80,7 @@ IF "%1" == "" (
       	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atrutil_!GOARCH!!EXTENSION! ./cmd/atrutil
    	)
 	IF "%1" == "atomic-harness" (
-      		go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness_!GOARCH!!EXTENSION! ./cmd/harness/
+      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness_!GOARCH!!EXTENSION! ./cmd/harness/
    	)
    )
 )
