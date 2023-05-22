@@ -292,7 +292,10 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 	platformName := utils.GetPlatformName()
 
-	fmt.Printf("finding coverage for %s for platform %s\n", filename, platformName)
+	if gVerbose {
+		fmt.Printf("finding coverage for %s for platform %s\n", filename, platformName)
+	}
+
 	filename = filepath.FromSlash(filename)
 
 	infile, err := os.OpenFile(filename, os.O_RDONLY, 0644)
@@ -310,7 +313,10 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 
 	for scanner.Scan() {
 		line := scanner.Text()
-		fmt.Print(line, "\n")
+
+		if gVerbose {
+			fmt.Print(line, "\n")
+		}
 
 		r := csv.NewReader(bytes.NewReader([]byte(line)))
 		r.LazyQuotes = true
@@ -328,25 +334,25 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 					criteria += 1
 					break
 				}
-				fmt.Print("Current Test Index: ", cur.TestIndex, "\nEntry TestIndex: ", entry.TestIndex, "\n")
-				fmt.Print("Current Test Name: \n", cur.TestName, "\n")
-				entryIndex, err := strconv.ParseUint(entry.TestIndex, 10, 64)
 
-				if err != nil {
-					fmt.Println("failed to parse entry index: ", err)
-					break
+				if gVerbose {
+					fmt.Print("Current Test Index: ", cur.TestIndex, "\nEntry TestIndex: ", entry.TestIndex, "\n")
+					fmt.Print("Current Test Name: ", cur.TestName, "\n")
 				}
 
-				if cur.TestIndex > 0 && cur.TestIndex == uint(entryIndex) {
+				if cur.TestIndex > 0 && cur.TestIndex == ToUInt(entry.TestIndex) {
 					criteria += 1
 					break
 				}
+
 			}
 		}
 	}
 
-	fmt.Printf("\n===========================================\nTotal number of criteria in %s for %s: %d \n", filename, platformName, criteria)
-	fmt.Print("===========================================\n")
+	if gVerbose {
+		fmt.Printf("\n===========================================\nTotal number of criteria found in %s for %s: %d \n", filename, platformName, criteria)
+		fmt.Print("===========================================\n")
+	}
 	// decide if scanner failed to open and display filepath given
 	err = scanner.Err()
 	if err != nil {
