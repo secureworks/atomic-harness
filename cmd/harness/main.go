@@ -163,9 +163,9 @@ func FillInToolPathDefaults() {
 	}
 	if flagGoArtRunnerPath == "" {
 		if runtime.GOOS == "windows" {
-			flagGoArtRunnerPath = cwd + "/../goartrun/bin/goartrun.exe"
+			flagGoArtRunnerPath = cwd + "/bin/goartrun.exe"
 		} else {
-			flagGoArtRunnerPath = cwd + "/../goartrun/bin/goartrun"
+			flagGoArtRunnerPath = cwd + "/bin/goartrun"
 		}
 	}
 	if flagTelemetryToolPath == "" {

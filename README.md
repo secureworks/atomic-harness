@@ -9,7 +9,6 @@ The automation of atomic test validation requires the following components.  You
  - Harness : this repo
  - Tests : [atomics](https://github.com/redcanaryco/atomic-red-team)
  - Criteria : [atomic-validation-criteria](https://github.com/secureworks/atomic-validation-criteria)
- - Runner : [goartrun](https://github.com/secureworks/goartrun)
  - Telemetry Tool : [example](https://github.com/secureworks/telemetry-tool-example)
 
 We specify a set of tests to run (by technique IDs, test-indices or test names, or tactics), then the harness will find the matching validation criteria (if present) for each technique.  For each test (e.g. `T1027.001#1`) the harness will launch the runner and wait some seconds to give the agent time to send telemetry.  The harness will then use the telemetry tool to find events for the runner shell process, all the events for the duration of the test, and look for events that match the validation criteria in the data.  For each test, there will be the following files:
@@ -29,7 +28,7 @@ Since every endpoint has it's own telemetry format and schema, you need to provi
 ## Setup and Build
 
 ```sh
-# clone other repos and build goartrun
+# clone other repos
 ./scripts/fetch_deps.sh
 make
 ```
