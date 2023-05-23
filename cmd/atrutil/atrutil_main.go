@@ -27,6 +27,7 @@ import (
 var flagCriteriaPath string
 var flagAtomicsPath string
 var flagPlatform string
+var flagGenCriteria string
 var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
@@ -40,6 +41,7 @@ func init() {
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
 	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
+	flag.StringVar(&flagGenCriteria, "gencriteria", "", "supply name of test (Ex: T1070.004) and the CSV for the criteria will be outputted")
 }
 
 func ToInt64(valstr string) int64 {
@@ -362,6 +364,77 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 	return criteria
 }
 
+func GenerateCriteria(tid string) {
+	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
+
+	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
+	if err != nil {
+		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
+		os.Exit(1)
+	}
+
+	if gVerbose {
+		fmt.Println("Searching for test", tid)
+	}
+
+	tests, ok := atomicTests[tid]
+	if !ok {
+		if gVerbose {
+			fmt.Println("An atomic test does not exist for this technique:", tid, "It could be an old copy of atomic-red-team repo or a fork or the criteria specifies an invalid technique")
+		}
+		// what error code should this return? for 'not found'?
+		os.Exit(1)
+	}
+
+	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
+
+	if err != nil {
+		fmt.Println("Could not load Yaml for ", tid)
+		os.Exit(1)
+	}
+
+	outfile, writeErr := os.OpenFile("./data/generated/"+tid+".generated.csv", os.O_CREATE|os.O_WRONLY, 0644)
+	if writeErr != nil {
+		fmt.Println("ERROR: unable to create outfile", tid, ".generated.csv", err)
+		os.Exit(2)
+	}
+
+	defer outfile.Close()
+	w := csv.NewWriter(outfile)
+
+	for i := range tests {
+
+		cur := yaml.AtomicTests[i]
+		if gVerbose {
+			fmt.Println(cur)
+		}
+
+		generatedCriteria := []string{tid, flagPlatform, strings.Split(cur.GUID, "-")[0], strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)}
+		w.Write(generatedCriteria)
+		w.Flush()
+
+		//if this code were to be reused for non-generated tests, remove this statement
+		genDisclaimer := []string{"FYI", "Auto-generated please review"}
+		w.Write(genDisclaimer)
+		w.Flush()
+
+		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
+		for _, com := range strings.Split(cur.Executor.Command, "\n") {
+			if len(com) > 0 {
+				out := []string{"_E_", "Process", "cmdline=~" + com}
+				w.Write(out)
+			}
+		}
+
+		//ensure a new line between every generated criteria
+		w.Write([]string{})
+		w.Flush()
+	}
+
+}
+
+// fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
+
 func main() {
 	flag.Parse()
 	if len(flagPlatform) == 0 {
@@ -382,6 +455,11 @@ func main() {
 
 	if gFindTestCoverage {
 		FindTestCoverage()
+		return
+	}
+
+	if len(flagCriteriaPath) > 0 {
+		GenerateCriteria(strings.ToUpper(flagGenCriteria))
 		return
 	}
 }
