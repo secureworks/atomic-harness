@@ -28,6 +28,7 @@ var flagCriteriaPath string
 var flagAtomicsPath string
 var flagPlatform string
 var flagGenCriteria string
+var flagGenCriteriaOutPath string
 var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
@@ -42,6 +43,7 @@ func init() {
 	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
 	flag.StringVar(&flagGenCriteria, "gencriteria", "", "supply name of test (Ex: T1070.004) and the CSV for the criteria will be outputted")
+	flag.StringVar(&flagGenCriteriaOutPath, "outfile", "", "supply name of directory to store generated criteria in csv form (requires gencriteria flag)")
 }
 
 func ToInt64(valstr string) int64 {
@@ -392,11 +394,18 @@ func GenerateCriteria(tid string) {
 		fmt.Println("Could not load Yaml for ", tid)
 		os.Exit(1)
 	}
+	var outfile *os.File
 
-	outfile, writeErr := os.OpenFile("./data/generated/"+tid+".generated.csv", os.O_CREATE|os.O_WRONLY, 0644)
-	if writeErr != nil {
-		fmt.Println("ERROR: unable to create outfile", tid, ".generated.csv", err)
-		os.Exit(2)
+	if len(flagGenCriteriaOutPath) > 0 {
+		var writeErr error
+		outfile, writeErr = os.OpenFile(flagGenCriteriaOutPath+"/"+tid+".generated.csv", os.O_CREATE|os.O_WRONLY, 0644)
+
+		if writeErr != nil {
+			fmt.Println("ERROR: unable to create outfile", flagGenCriteriaOutPath+tid+".generated.csv", writeErr)
+			os.Exit(2)
+		}
+	} else {
+		outfile = os.Stdout
 	}
 
 	defer outfile.Close()
@@ -408,10 +417,6 @@ func GenerateCriteria(tid string) {
 
 		generatedCriteria := []string{tid, flagPlatform, strings.Split(cur.GUID, "-")[0], strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)}
 
-		if gVerbose {
-			fmt.Println(strings.Join(generatedCriteria, ","))
-		}
-
 		w.Write(generatedCriteria)
 		w.Flush()
 
@@ -420,18 +425,11 @@ func GenerateCriteria(tid string) {
 		w.Write(genDisclaimer)
 		w.Flush()
 
-		if gVerbose {
-			fmt.Println(strings.Join(genDisclaimer, ","))
-		}
 		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
 		for _, com := range strings.Split(cur.Executor.Command, "\n") {
 			if len(com) > 0 {
 				out := []string{"_E_", "Process", "cmdline=~" + com}
 				w.Write(out)
-
-				if gVerbose {
-					fmt.Println(strings.Join(out, ","))
-				}
 			}
 		}
 
@@ -439,12 +437,10 @@ func GenerateCriteria(tid string) {
 		w.Write([]string{})
 		w.Flush()
 
-		if gVerbose {
-			fmt.Println()
-		}
 	}
-
-	fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
+	if len(flagGenCriteriaOutPath) > 0 {
+		fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
+	}
 
 }
 
