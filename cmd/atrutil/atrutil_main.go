@@ -405,11 +405,13 @@ func GenerateCriteria(tid string) {
 	for i := range tests {
 
 		cur := yaml.AtomicTests[i]
-		if gVerbose {
-			fmt.Println(cur)
-		}
 
 		generatedCriteria := []string{tid, flagPlatform, strings.Split(cur.GUID, "-")[0], strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)}
+
+		if gVerbose {
+			fmt.Println(strings.Join(generatedCriteria, ","))
+		}
+
 		w.Write(generatedCriteria)
 		w.Flush()
 
@@ -418,18 +420,31 @@ func GenerateCriteria(tid string) {
 		w.Write(genDisclaimer)
 		w.Flush()
 
+		if gVerbose {
+			fmt.Println(strings.Join(genDisclaimer, ","))
+		}
 		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
 		for _, com := range strings.Split(cur.Executor.Command, "\n") {
 			if len(com) > 0 {
 				out := []string{"_E_", "Process", "cmdline=~" + com}
 				w.Write(out)
+
+				if gVerbose {
+					fmt.Println(strings.Join(out, ","))
+				}
 			}
 		}
 
 		//ensure a new line between every generated criteria
 		w.Write([]string{})
 		w.Flush()
+
+		if gVerbose {
+			fmt.Println()
+		}
 	}
+
+	fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
 
 }
 
