@@ -370,7 +370,7 @@ func UpdateCoverage() {
 	prev := gValidateState.Coverage
 	gValidateState.Coverage = float64(numFound) / float64(numExpected)
 
-	if gValidateState.Coverage >= 1.0 && prev != gValidateState.Coverage {
+	if gVerbose && gValidateState.Coverage >= 1.0 && prev != gValidateState.Coverage {
 		fmt.Println("SUCCESS: Agent Telemetry Has Full Coverage")
 	}
 }
@@ -428,7 +428,9 @@ func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
 			// is this the target test?
 			if technique == testRun.criteria.Technique {
 				tsttok := fmt.Sprintf("%s_%d", technique, testRun.criteria.TestIndex)
-				fmt.Println("contains check", folder, tsttok, tsNs)
+				if gVerbose {
+					fmt.Println("contains check", folder, tsttok, tsNs)
+				}
 				if strings.Contains(folder, tsttok) {
 					testRun.TimeOfParentShell = tsNs
 					testRun.TimeOfNextStage = 0
