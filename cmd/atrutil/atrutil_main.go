@@ -409,33 +409,42 @@ func GenerateCriteria(tid string) {
 	}
 
 	defer outfile.Close()
-	w := csv.NewWriter(outfile)
 
 	for i := range tests {
 
 		cur := yaml.AtomicTests[i]
 
-		generatedCriteria := []string{tid, flagPlatform, strings.Split(cur.GUID, "-")[0], strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)}
+		//create readable variable names for criteria string array
 
-		w.Write(generatedCriteria)
-		w.Flush()
+		guid := strings.Split(cur.GUID, "-")[0]
+
+		testName := strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)
+
+		generatedCriteria := []string{tid, flagPlatform, guid, testName}
+
+		s := strings.Join(generatedCriteria, ",")
+
+		s += fmt.Sprintln()
 
 		//if this code were to be reused for non-generated tests, remove this statement
 		genDisclaimer := []string{"FYI", "Auto-generated please review"}
-		w.Write(genDisclaimer)
-		w.Flush()
+		s += strings.Join(genDisclaimer, ",")
+
+		s += fmt.Sprintln()
 
 		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
 		for _, com := range strings.Split(cur.Executor.Command, "\n") {
 			if len(com) > 0 {
 				out := []string{"_E_", "Process", "cmdline=~" + com}
-				w.Write(out)
+				s += strings.Join(out, ",")
+				s += fmt.Sprintln()
 			}
 		}
 
+		outfile.WriteString(s)
+
 		//ensure a new line between every generated criteria
-		w.Write([]string{})
-		w.Flush()
+		outfile.WriteString("\n")
 
 	}
 	if len(flagGenCriteriaOutPath) > 0 {
