@@ -27,6 +27,8 @@ import (
 var flagCriteriaPath string
 var flagAtomicsPath string
 var flagPlatform string
+var flagGenCriteria string
+var flagGenCriteriaOutPath string
 var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
@@ -40,6 +42,8 @@ func init() {
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
 	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
+	flag.StringVar(&flagGenCriteria, "gencriteria", "", "supply name of test (Ex: T1070.004) and the CSV for the criteria will be outputted")
+	flag.StringVar(&flagGenCriteriaOutPath, "outfile", "", "supply name of directory to store generated criteria in csv form (requires gencriteria flag)")
 }
 
 func ToInt64(valstr string) int64 {
@@ -362,6 +366,95 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 	return criteria
 }
 
+func GenerateCriteria(tid string) {
+	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
+
+	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
+	if err != nil {
+		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
+		os.Exit(1)
+	}
+
+	if gVerbose {
+		fmt.Println("Searching for test", tid)
+	}
+
+	tests, ok := atomicTests[tid]
+	if !ok {
+		if gVerbose {
+			fmt.Println("An atomic test does not exist for this technique:", tid, "It could be an old copy of atomic-red-team repo or a fork or the criteria specifies an invalid technique")
+		}
+		// what error code should this return? for 'not found'?
+		os.Exit(1)
+	}
+
+	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
+
+	if err != nil {
+		fmt.Println("Could not load Yaml for ", tid)
+		os.Exit(1)
+	}
+	var outfile *os.File
+
+	if len(flagGenCriteriaOutPath) > 0 {
+		var writeErr error
+		outfile, writeErr = os.OpenFile(flagGenCriteriaOutPath+"/"+tid+".generated.csv", os.O_CREATE|os.O_WRONLY, 0644)
+
+		if writeErr != nil {
+			fmt.Println("ERROR: unable to create outfile", flagGenCriteriaOutPath+tid+".generated.csv", writeErr)
+			os.Exit(2)
+		}
+	} else {
+		outfile = os.Stdout
+	}
+
+	defer outfile.Close()
+
+	for i := range tests {
+
+		cur := yaml.AtomicTests[i]
+
+		//create readable variable names for criteria string array
+
+		guid := strings.Split(cur.GUID, "-")[0]
+
+		testName := strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)
+
+		generatedCriteria := []string{tid, flagPlatform, guid, testName}
+
+		s := strings.Join(generatedCriteria, ",")
+
+		s += fmt.Sprintln()
+
+		//if this code were to be reused for non-generated tests, remove this statement
+		genDisclaimer := []string{"FYI", "Auto-generated please review"}
+		s += strings.Join(genDisclaimer, ",")
+
+		s += fmt.Sprintln()
+
+		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
+		for _, com := range strings.Split(cur.Executor.Command, "\n") {
+			if len(com) > 0 {
+				out := []string{"_E_", "Process", "cmdline=~" + com}
+				s += strings.Join(out, ",")
+				s += fmt.Sprintln()
+			}
+		}
+
+		outfile.WriteString(s)
+
+		//ensure a new line between every generated criteria
+		outfile.WriteString("\n")
+
+	}
+	if len(flagGenCriteriaOutPath) > 0 {
+		fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
+	}
+
+}
+
+// fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
+
 func main() {
 	flag.Parse()
 	if len(flagPlatform) == 0 {
@@ -382,6 +475,11 @@ func main() {
 
 	if gFindTestCoverage {
 		FindTestCoverage()
+		return
+	}
+
+	if len(flagCriteriaPath) > 0 {
+		GenerateCriteria(strings.ToUpper(flagGenCriteria))
 		return
 	}
 }
