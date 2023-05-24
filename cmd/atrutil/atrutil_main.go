@@ -244,10 +244,9 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 	dirPath = filepath.FromSlash(dirPath)
 	allfiles, err := ioutil.ReadDir(dirPath)
 
-	platformName := utils.GetPlatformName()
 	var percentage float32 = 0.0
 
-	readErr := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), atomicMap)
+	readErr := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), atomicMap, flagPlatform)
 	if readErr != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
 		os.Exit(1)
@@ -260,7 +259,7 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 			total += 1
 		}
 	}
-	fmt.Println("Found", total, "tests for platform", platformName)
+	//fmt.Println("Found", total, "tests for platform", flagPlatform)
 
 	if err != nil {
 		fmt.Println("ERROR: unable to list files in "+dirPath, err)
@@ -288,7 +287,7 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 
 	percentage = float32(criteria) / float32(total)
 
-	fmt.Printf("Percent coverage for %s: %f%%", platformName, percentage)
+	fmt.Printf("%s Criteria coverage : %3.1f %% of %d atomic tests\n", flagPlatform, percentage * 100.0, total)
 
 	return percentage
 }
