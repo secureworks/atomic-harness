@@ -413,6 +413,13 @@ func GenerateCriteria(tid string) {
 	for i := range tests {
 
 		cur := yaml.AtomicTests[i]
+		tmp := strings.Join(cur.SupportedPlatforms,"|")
+                if !strings.Contains(tmp, flagPlatform) {
+			continue
+		}
+		if "manual" == strings.ToLower(cur.Executor.Name) {
+			continue
+		}
 
 		//create readable variable names for criteria string array
 
@@ -432,20 +439,26 @@ func GenerateCriteria(tid string) {
 
 		s += fmt.Sprintln()
 
-		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
+		// put input args in criteria, so they can be easily changed
+
+		for name, val := range cur.InputArugments {
+			s += fmt.Sprintf("ARG,%s,%s\n", name, val.Default)
+		}
+
+		//DEFAULT: Treat each command as a process event and use cmdline contains (~=) to show which command is run
 		for _, com := range strings.Split(cur.Executor.Command, "\n") {
-			if len(com) > 0 {
-				out := []string{"_E_", "Process", "cmdline=~" + com}
-				s += strings.Join(out, ",")
-				s += fmt.Sprintln()
+			if len(com) == 0 {
+				continue
 			}
+			out := []string{"_E_", "Process", "cmdline~=" + com}
+			s += strings.Join(out, ",")
+			s += fmt.Sprintln()
 		}
 
 		outfile.WriteString(s)
 
 		//ensure a new line between every generated criteria
-		outfile.WriteString("\n")
-
+		fmt.Fprintln(outfile)
 	}
 	if len(flagGenCriteriaOutPath) > 0 {
 		fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
