@@ -1,5 +1,9 @@
 package types
 
+import (
+    "fmt"
+)
+
 // RunSpec - schema for goartrun job
 type RunSpec struct {
    Technique  string
@@ -83,6 +87,10 @@ type TestSpec struct {
     TestGuid         string  // optional?
 
     Criteria         []*AtomicTestCriteria
+}
+
+func (t TestSpec) Id() string {
+    return fmt.Sprintf("%s [%s] %s '%s'",t.Technique,t.TestIndex,t.TestName,t.TestGuid)    
 }
 
 type TestProgress struct {

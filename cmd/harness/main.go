@@ -377,7 +377,7 @@ func AddOnce(spec *types.TestSpec, entry *types.AtomicTestCriteria) {
 	}
 
 	if gVerbose {
-		fmt.Printf("Add criteria %s for spec %s\n",entry.Id(), spec)
+		fmt.Printf("Add criteria %s for spec %s\n",entry.Id(), spec.Id())
 	}
 
 	spec.Criteria = append(spec.Criteria, entry)
@@ -489,13 +489,17 @@ func SubstituteVarsInCriteria(criteria *types.AtomicTestCriteria) bool {
 	return true
 }
 
-func ClearTelemetryCache() {
-	// TODO: build command-line from config
-	cmd := exec.Command(filepath.FromSlash(flagTelemetryToolPath),"--clearcache")
+func CallTelemetryPrepare(doClearCache bool) {
+	clearArg := ""
+	if doClearCache {
+		clearArg = "--clearcache"
+	}
+	cmd := exec.Command(filepath.FromSlash(flagTelemetryToolPath),"--prepare", clearArg)
 
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		fmt.Println("Failed to clear telemetry cache", err)
+		fmt.Println("telemtool --prepare error: ", err)
+		fmt.Println("  " + string(output))
 		return
 	}
 	if len(output) != 0 {
@@ -1179,9 +1183,7 @@ func main() {
 		fmt.Println(gSysInfo)
 	}
 
-	if flagClearTelemetryCache {
-		ClearTelemetryCache() // TODO : call telemtool --prepare <--clearcache>
-	}
+	CallTelemetryPrepare(flagClearTelemetryCache)
 
 	if "" == flagResultsPath {
 
