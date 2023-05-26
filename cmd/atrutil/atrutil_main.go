@@ -244,10 +244,9 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 	dirPath = filepath.FromSlash(dirPath)
 	allfiles, err := ioutil.ReadDir(dirPath)
 
-	platformName := utils.GetPlatformName()
 	var percentage float32 = 0.0
 
-	readErr := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), atomicMap)
+	readErr := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), atomicMap, flagPlatform)
 	if readErr != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
 		os.Exit(1)
@@ -260,7 +259,7 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 			total += 1
 		}
 	}
-	fmt.Println("Found", total, "tests for platform", platformName)
+	//fmt.Println("Found", total, "tests for platform", flagPlatform)
 
 	if err != nil {
 		fmt.Println("ERROR: unable to list files in "+dirPath, err)
@@ -288,7 +287,7 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 
 	percentage = float32(criteria) / float32(total)
 
-	fmt.Printf("Percent coverage for %s: %f%%", platformName, percentage)
+	fmt.Printf("%s Criteria coverage : %3.1f %% of %d atomic tests\n", flagPlatform, percentage * 100.0, total)
 
 	return percentage
 }
@@ -413,6 +412,13 @@ func GenerateCriteria(tid string) {
 	for i := range tests {
 
 		cur := yaml.AtomicTests[i]
+		tmp := strings.Join(cur.SupportedPlatforms,"|")
+                if !strings.Contains(tmp, flagPlatform) {
+			continue
+		}
+		if "manual" == strings.ToLower(cur.Executor.Name) {
+			continue
+		}
 
 		//create readable variable names for criteria string array
 
@@ -432,20 +438,26 @@ func GenerateCriteria(tid string) {
 
 		s += fmt.Sprintln()
 
-		//DEFAULT: Treat each command as a process event and use cmdline contains (=~) to show which command is run
+		// put input args in criteria, so they can be easily changed
+
+		for name, val := range cur.InputArugments {
+			s += fmt.Sprintf("ARG,%s,%s\n", name, val.Default)
+		}
+
+		//DEFAULT: Treat each command as a process event and use cmdline contains (~=) to show which command is run
 		for _, com := range strings.Split(cur.Executor.Command, "\n") {
-			if len(com) > 0 {
-				out := []string{"_E_", "Process", "cmdline=~" + com}
-				s += strings.Join(out, ",")
-				s += fmt.Sprintln()
+			if len(com) == 0 {
+				continue
 			}
+			out := []string{"_E_", "Process", "cmdline~=" + com}
+			s += strings.Join(out, ",")
+			s += fmt.Sprintln()
 		}
 
 		outfile.WriteString(s)
 
 		//ensure a new line between every generated criteria
-		outfile.WriteString("\n")
-
+		fmt.Fprintln(outfile)
 	}
 	if len(flagGenCriteriaOutPath) > 0 {
 		fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")

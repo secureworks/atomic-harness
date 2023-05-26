@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	types "github.com/secureworks/atomic-harness/pkg/types"
+	utils "github.com/secureworks/atomic-harness/pkg/utils"
 )
 
 type ExtractState struct {
@@ -25,6 +26,10 @@ var (
 
 	// sh /tmp/artwork-T1560.002_3-458617291/goart-T1560.002-test.bash
 	gRxGoArtStage = regexp.MustCompile(`sh /tmp/(artwork-T[\w-_\.\d]+)/goart-(T[\d\._]+)-(\w+)`)
+
+	// CMD /c C:\\Users\\admin\\AppData\\Local\\Temp\\artwork-T1047_1-2854796409\\goart-T1047-test.bat
+	// POWERSHELL -NoProfile C:\\Users\\admin\\AppData\\Local\\Temp\\artwork-T1027_2-3400567469\\goart-T1027-test.ps1
+	gRxGoArtStageWin = regexp.MustCompile(`(POWERSHELL |CMD /c |pwsh ).*\\(artwork-T[\w-_\.\d]+)\\goart-(T[\d\._]+)-(\w+)`)
 )
 
 func CheckMatch(haystack,op,needle string) bool {
@@ -107,7 +112,7 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
 		}
 	}
 	return retval
@@ -190,7 +195,7 @@ func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			fmt.Printf("ONLY %d of %d FieldChecks satisfied.\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
 		}
 	}
 	return retval
@@ -416,32 +421,41 @@ func GetTelemChar(exp *types.ExpectedEvent) string {
  * Side-effects: will set testRun.TimeOfParentShell,ShellPid, TimeOfNextStage
  */
 func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
-	a := gRxGoArtStage.FindStringSubmatch(cmdline)
-	if len(a) > 3 {
-		folder := a[1]
-		technique := a[2]
-		stageName := a[3]
-		if gVerbose {
-			fmt.Println("Found stage", stageName,"for", technique,"folder:",folder)
-		}
-		if "test" == stageName {
-			// is this the target test?
-			if technique == testRun.criteria.Technique {
-				tsttok := fmt.Sprintf("%s_%d", technique, testRun.criteria.TestIndex)
-				if gVerbose {
-					fmt.Println("contains check", folder, tsttok, tsNs)
-				}
-				if strings.Contains(folder, tsttok) {
-					testRun.TimeOfParentShell = tsNs
-					testRun.TimeOfNextStage = 0
-				}
-			}
-		} else if 0 != testRun.TimeOfParentShell {
-			testRun.TimeOfNextStage = tsNs
-		}
-		return true
+	a := []string{}
+	i := 1
+	if utils.GetPlatformName() == "windows" {
+		i += 1  // in 2,3,4 indexes on windows
+		a = gRxGoArtStageWin.FindStringSubmatch(cmdline)
+	} else {
+		a = gRxGoArtStage.FindStringSubmatch(cmdline)
 	}
-	return false
+	if len(a) < i+3 {
+		return false
+	}
+
+	folder := a[i]
+	technique := a[i+1]
+	stageName := a[i+2]
+
+	if gVerbose {
+		fmt.Println("Found stage", stageName,"for", technique,"folder:",folder)
+	}
+	if "test" == stageName {
+		// is this the target test?
+		if technique == testRun.criteria.Technique {
+			tsttok := fmt.Sprintf("%s_%d", technique, testRun.criteria.TestIndex)
+			if gVerbose {
+				fmt.Println("contains check", folder, tsttok, tsNs)
+			}
+			if strings.Contains(folder, tsttok) {
+				testRun.TimeOfParentShell = tsNs
+				testRun.TimeOfNextStage = 0
+			}
+		}
+	} else if 0 != testRun.TimeOfParentShell {
+		testRun.TimeOfNextStage = tsNs
+	}
+	return true
 }
 
 /**
