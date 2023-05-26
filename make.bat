@@ -79,4 +79,4 @@ echo.
       	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness!EXTENSION! ./cmd/harness/
    	)
 )
-echo Finished Building. Executables located in /bin directory
+echo Finished Building. Executables located in ./bin directory
