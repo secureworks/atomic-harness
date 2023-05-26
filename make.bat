@@ -62,26 +62,21 @@ git log --oneline --decorate > CHANGELOG
 echo Changelog Build Finished
 echo.
 
-
-  for /F "tokens=2 delims==" %%s in ('set ARCH[') do (
  
 
     SET GOOS=windows
-    SET GOARCH=%%s
-    SET GOARM=6
-    echo Building !GOOS!/!GOARCH!
+    echo Building !GOOS!
 
     SET EXTENSION=".exe"
 	IF "%1" == "all" (
-      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness_!GOARCH!!EXTENSION! ./cmd/harness/
-      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atrutil_!GOARCH!!EXTENSION! ./cmd/atrutil
+      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness!EXTENSION! ./cmd/harness/
+      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atrutil!EXTENSION! ./cmd/atrutil
    	)
  	IF "%1" == "atrutil" (
-      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atrutil_!GOARCH!!EXTENSION! ./cmd/atrutil
+      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atrutil!EXTENSION! ./cmd/atrutil
    	)
 	IF "%1" == "atomic-harness" (
-      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness_!GOARCH!!EXTENSION! ./cmd/harness/
+      	go build -buildmode=exe -ldflags "-s -w -X main.version=%@version% -X main.buildstamp=%@bdate%-%@btime% -X main.hash=%@gitrev%" -o bin/atomic-harness!EXTENSION! ./cmd/harness/
    	)
-   )
 )
-echo Finished Building
+echo Finished Building. Executables located in ./bin directory
