@@ -527,7 +527,11 @@ func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 
 	for _, tool := range gTelemTools {
 		// TODO: pass tool.Suffix as arg?
-		cmd := exec.Command(tool.Path,"--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
+		suffix := tool.Suffix
+		if len(suffix) == 0 {
+			suffix = "''"
+		}
+		cmd := exec.Command(tool.Path,"--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--suffix", suffix, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 
 		fmt.Println("launching ",cmd.String())
 		output, err := cmd.CombinedOutput()
@@ -1290,6 +1294,20 @@ func Revalidate(prevResultsDir string) {
 	fmt.Println(SPrintState(testRuns,true))
 }
 
+func GetToolNameAndSuffixFromPath(path string) (string,string) {
+	retval := ""
+	_,name := filepath.Split(path)
+	tmp := strings.Split(name,"_")
+	if len(tmp) > 1 {
+		retval = "_" + tmp[len(tmp)-1]
+		ext := filepath.Ext(name)
+		if len(ext) > 0 {
+			retval = retval[0:len(retval)-len(ext)]
+		}
+	}
+	return name,retval
+}
+
 /*
  * parses the telemetrytoolpath arg, which can contain multiple comma-delimited
  * paths.
@@ -1303,16 +1321,7 @@ func PrepTelemTools(arg string) []*TelemTool {
 		obj := &TelemTool{}
 		obj.Path = filepath.FromSlash(entry)
 
-		_,name := filepath.Split(obj.Path)
-		obj.Name = name
-		tmp := strings.Split(name,"_")
-		if len(tmp) > 1 {
-			obj.Suffix = "_" + tmp[len(tmp)-1]
-			ext := filepath.Ext(name)
-			if len(ext) > 0 {
-				obj.Suffix = obj.Suffix[0:len(obj.Suffix)-len(ext)]
-			}
-		}
+		obj.Name,obj.Suffix = GetToolNameAndSuffixFromPath(obj.Path)
 		ret = append(ret, obj)
 	}
 	return ret

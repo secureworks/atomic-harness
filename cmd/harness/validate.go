@@ -286,7 +286,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 
 	// write native telemetry matches to a file
 	outpath := testRun.resultsDir + "/matches" + tool.Suffix + ".json"
-	matchFileHandle,err := os.OpenFile(outpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	matchFileHandle,err := os.OpenFile(outpath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("ERROR: unable to create outfile",outpath, err)
 	}
