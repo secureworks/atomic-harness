@@ -19,6 +19,7 @@ type ExtractState struct {
 	TotalEvents uint64            `json:"total_events"`
 	NumMatches  uint64            `json:"num_matches"`
 	Coverage    float64           `json:"coverage"`
+	MatchingTag string            `json:"matching_tag",omitempty`
 }
 
 var (
@@ -254,7 +255,7 @@ func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 	return retval
 }
 
-func ValidateSimpleTelemetry(testRun *SingleTestRun) {
+func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 	gValidateState = ExtractState{}
 	gValidateState.StartTime = uint64(testRun.StartTime)
 	gValidateState.EndTime = uint64(testRun.EndTime)
@@ -265,14 +266,14 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 
 	// load simple_telemetry.json, process each event
 
-	path := testRun.resultsDir + "/../simple_telemetry.json"
+	path := testRun.resultsDir + "/../simple_telemetry" + tool.Suffix + ".json"
 	simpleLines, err := ReadFileLines(path)
 	if err != nil {
 		fmt.Println("ERROR: file not found", path, err)
 		return
 	}
 
-	path = testRun.resultsDir + "/../telemetry.json"
+	path = testRun.resultsDir + "/../telemetry" + tool.Suffix + ".json"
 	rawJsonLines, err := ReadFileLines(path)
 	if err != nil {
 		fmt.Println("ERROR: file not found", path, err)
@@ -284,7 +285,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 	}
 
 	// write native telemetry matches to a file
-	outpath := testRun.resultsDir + "/matches.json"
+	outpath := testRun.resultsDir + "/matches" + tool.Suffix + ".json"
 	matchFileHandle,err := os.OpenFile(outpath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		fmt.Println("ERROR: unable to create outfile",outpath, err)
@@ -315,7 +316,20 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 			fmt.Println("missing handling of type", line)
 		}
 		if isMatch && matchFileHandle != nil {
+
+			// write match to file
+
 			fmt.Fprintln(matchFileHandle, rawEventStr)
+
+			// did we get a technique match?
+			if 0 == len(gValidateState.MatchingTag) && len(evt.MitreTechniques) > 0 {
+				for _,tid := range evt.MitreTechniques {
+					if strings.HasPrefix(tid, testRun.criteria.Technique) {
+						gValidateState.MatchingTag = tid
+						testRun.HasMitreTag = true
+					}
+				}
+			}
 		}
 	}
 
@@ -326,7 +340,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 	// save results to file
 
 	s := GetTelemTypes(& gValidateState.TestData)
-	outPath := testRun.resultsDir + "/match_string.txt"
+	outPath := testRun.resultsDir + "/match_string" + tool.Suffix + ".txt"
 	err = os.WriteFile(outPath, []byte(s), 0644)
 	if err != nil {
 		fmt.Println("ERROR: unable to write file", outPath, err)
@@ -337,7 +351,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 		fmt.Println("failed to encode validation state json", err)
 	} else {
 
-		outPath = testRun.resultsDir + "/validate_summary.json"
+		outPath = testRun.resultsDir + "/validate_summary" + tool.Suffix + ".json"
 		err = os.WriteFile(outPath, jb, 0644)
 		if err != nil {
 			fmt.Println("ERROR: unable to write file", outPath, err)
@@ -345,6 +359,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun) {
 	}
 
 	// set status based on coverage
+	// NOTE: with multiple telemtools, status will depend on last tool?
 
 	if gValidateState.Coverage == 1.0 {
 		testRun.status = types.StatusValidateSuccess
