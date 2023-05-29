@@ -6,3 +6,4 @@ telemtool
 bin/
 data/generated
 CHANGELOG
+.gitlab*

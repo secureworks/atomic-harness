@@ -43,6 +43,13 @@ type SingleTestRun struct {
     ShellPid          int64
     TimeWorkDirCreate int64
     TimeWorkDirDelete int64
+    HasMitreTag       bool
+}
+
+type TelemTool struct {
+	Name string       // telemtool_e2e
+	Path string       // /some/path/to/telemtool_e2e.exe
+	Suffix string     // _e2e
 }
 
 var kTestRunTimeoutSeconds = 10*time.Second
@@ -59,6 +66,7 @@ var flagTechniquesFilePath string
 var flagServerConfigsCsvPath string
 var flagRegularRunUser string
 var flagRetryFailed string
+var flagRevalidate string
 var flagClearTelemetryCache bool
 var flagFilterByGoartrunShell bool
 var flagFilterFileEventsTmp bool
@@ -74,6 +82,7 @@ var gMitreTechniqueNames = map[string]string{} // loaded from data/linux_techniq
 var gFlagNoRun = false
 var gKeepRunning = true
 var gAtomicTests = map[string][]*types.TestSpec{} // tid -> tests
+var gTelemTools = []*TelemTool{}
 
 func init() {
 	flag.StringVar(&flagCriteriaPath, "criteriapath", "", "path to folder containing CSV files used to validate telemetry")
@@ -85,10 +94,12 @@ func init() {
 	flag.StringVar(&flagTechniquesFilePath, "runlist", "", "path to file containing list of techniques to run. CSV or newline-delimited text")
 	flag.StringVar(&flagServerConfigsCsvPath, "serverscsv", "", "path to CSV file containing list of servers referenced in detection rules")
 	flag.StringVar(&flagRegularRunUser, "username", "", "Optional username for running unpriviledged tests")
+
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
 	flag.BoolVar(&gDebug, "debug", false, "print debugging details")
 	flag.BoolVar(&gFlagNoRun, "norun", false, "exit without running any tests")
 	flag.StringVar(&flagRetryFailed, "retryfailed","","path to previous resultsdir, re-run tests not Validated or Skipped")
+	flag.StringVar(&flagRevalidate, "revalidate","","path to previous resultsdir, re-run validation")
 	flag.BoolVar(&flagClearTelemetryCache, "telemetryclear", false, "if true, will call telemetry tool to clear cache")
 	flag.BoolVar(&flagFilterByGoartrunShell, "filtergoartsh", true, "if true, do not validate events before/after goartrun test shell")
 	flag.BoolVar(&flagFilterFileEventsTmp, "filtergoartdir", true, "if true, do not validate events before/after create and delete of goartrun working dir. Working dir is in /tmp, so if that is not in the file monitoring paths of endpoint agent, set this to false.")
@@ -490,44 +501,57 @@ func SubstituteVarsInCriteria(criteria *types.AtomicTestCriteria) bool {
 }
 
 func CallTelemetryPrepare(doClearCache bool) {
+	resultsDir := filepath.FromSlash(flagResultsPath)
+
 	clearArg := ""
 	if doClearCache {
 		clearArg = "--clearcache"
 	}
-	cmd := exec.Command(filepath.FromSlash(flagTelemetryToolPath),"--prepare", clearArg)
 
-	output, err := cmd.CombinedOutput()
-	if err != nil {
-		fmt.Println("telemtool --prepare error: ", err)
-		fmt.Println("  " + string(output))
-		return
-	}
-	if len(output) != 0 {
-		fmt.Println("  " + string(output))
+	for _, tool := range gTelemTools {
+		// TODO: pass tool.Suffix as an arg?
+		cmd := exec.Command(tool.Path,"--prepare", clearArg,"--resultsdir", resultsDir)
+
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			fmt.Println(tool.Name + " --prepare error: ", err)
+			fmt.Println("  " + string(output))
+		}
+		if len(output) != 0 {
+			fmt.Println("  " + string(output))
+		}
 	}
 }
 
 func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 
-	cmd := exec.Command(filepath.FromSlash(flagTelemetryToolPath),"--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
+	for _, tool := range gTelemTools {
+		// TODO: pass tool.Suffix as arg?
+		suffix := tool.Suffix
+		if len(suffix) == 0 {
+			suffix = "''"
+		}
+		cmd := exec.Command(tool.Path,"--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--suffix", suffix, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 
-	fmt.Println("launching ",cmd.String())
-	output, err := cmd.CombinedOutput()
+		fmt.Println("launching ",cmd.String())
+		output, err := cmd.CombinedOutput()
 
-	exitCode := cmd.ProcessState.ExitCode()
-	status := types.TestStatus(exitCode)
+		exitCode := cmd.ProcessState.ExitCode()
+		status := types.TestStatus(exitCode)
 
-	//look for StateValidateSuccess, etc.
-	fmt.Println("telemetry tool exit code:",exitCode, status)
+		//look for StateValidateSuccess, etc.
+		fmt.Println(tool.Name,"exit code:",exitCode, status)
 
-	if err != nil && exitCode <= int(types.StatusValidateFail) {
-		fmt.Println("  telemetry tool err:", err)
-	}
-	if len(output) != 0 {
-		outPath := filepath.FromSlash(resultsDir + "/telemetry_tool_output.txt")
-		err = os.WriteFile(outPath, output, 0644)
-		if err != nil {
-			fmt.Println("ERROR: unable to write file", outPath, err)
+		if err != nil && exitCode <= int(types.StatusValidateFail) {
+			fmt.Println("  telemetry tool err:", err)
+		}
+
+		if len(output) != 0 {
+			outPath := filepath.FromSlash(resultsDir + "/telemetry_tool_output" + tool.Suffix +".txt")
+			err = os.WriteFile(outPath, output, 0644)
+			if err != nil {
+				fmt.Println("ERROR: unable to write file", outPath, err)
+			}
 		}
 	}
 }
@@ -1137,7 +1161,9 @@ func RunTests() {
 					testRun.state = types.StateWaitForTelemetry
 					SaveState(testRuns)
 
-					ValidateSimpleTelemetry(testRun)
+					for _, tool := range gTelemTools {
+						ValidateSimpleTelemetry(testRun, tool)
+					}
 
 					testRun.state = types.StateDone
 				}
@@ -1165,6 +1191,142 @@ func RunSignalHandler() {
 	gKeepRunning = false
 }
 
+/*
+ * read in status of previous run in resultsDir, and
+ * for every test that ran, add an entry to gTestSpecs
+ */
+func LoadSpecsForRevalidate(prevResultsDir string, dest *[]*types.TestSpec) {
+	results := []types.TestProgress{}
+
+	path := prevResultsDir
+	if !strings.HasSuffix(path,".json") {
+		path += "/status.json"
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		fmt.Println("Failed to load",path,err)
+		return
+	}
+	if len(body) == 0 {
+		fmt.Println("status.json is empty")
+		return
+	}
+	if err = json.Unmarshal(body,&results); err != nil {
+		fmt.Println("failed to parse",path,err)
+		return
+	}
+
+	for _,entry := range results {
+		if int(entry.Status) >= int(types.StatusTestSuccess) {
+			continue
+		}
+		spec := &types.TestSpec {}
+
+		spec.Technique = entry.Technique
+		spec.TestIndex = entry.TestIndex
+		spec.TestName = entry.TestName
+
+		(*dest) = append((*dest), spec)
+	}
+}
+
+func Revalidate(prevResultsDir string) {
+	flagResultsPath = prevResultsDir
+	testRuns := []*SingleTestRun{}
+
+	for _,spec := range gTestSpecs {
+
+		for _, rec := range spec.Criteria {
+
+			resultsDir := filepath.FromSlash(flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d",rec.TestIndex) + "_" + rec.TestGuid)
+			testRun := &SingleTestRun{}
+			testRun.criteria = rec
+			testRun.resultsDir = resultsDir
+			testRun.state = types.StateCriteriaLoaded
+			testRuns = append(testRuns, testRun)
+
+			// TODO: load runspec, extract workingDir
+			runConfig := &types.RunSpec{}
+			//runConfig := BuildRunSpec(rec, workingDir, resultsDir)
+			//testRun.workingDir = workingDir
+
+			path := filepath.FromSlash(resultsDir + "/runspec.json")
+			body, err := os.ReadFile(path)
+			if err != nil {
+				fmt.Println("Failed to load",path,err)
+				continue
+			}
+			if len(body) == 0 {
+				fmt.Println("runspec.json is empty")
+				continue
+			}
+			if err = json.Unmarshal(body,runConfig); err != nil {
+				fmt.Println("failed to parse",path,err)
+				continue
+			}
+			testRun.workingDir = runConfig.TempDir
+
+			// load atomic to get default args
+			utils.LoadAtomicDefaultArgs(rec, filepath.FromSlash(flagAtomicsPath), gVerbose)
+
+			// some test Args and field checks need variable substitutions
+
+			if false == SubstituteSysInfoArgs(rec) || false == SubstituteVarsInCriteria(testRun.criteria) {
+				MarkAsSkipped(testRun)
+				SaveState(testRuns)
+				continue
+			}
+		}
+	}
+
+	for _,testRun := range testRuns {
+
+		for _, tool := range gTelemTools {
+			ValidateSimpleTelemetry(testRun, tool)
+		}
+
+		testRun.state = types.StateDone
+		WriteTestRunStatusFile(testRun)
+		SaveState(testRuns)
+	}
+
+	fmt.Println("Done. Output in", flagResultsPath)
+	fmt.Println(SPrintState(testRuns,true))
+}
+
+func GetToolNameAndSuffixFromPath(path string) (string,string) {
+	retval := ""
+	_,name := filepath.Split(path)
+	tmp := strings.Split(name,"_")
+	if len(tmp) > 1 {
+		retval = "_" + tmp[len(tmp)-1]
+		ext := filepath.Ext(name)
+		if len(ext) > 0 {
+			retval = retval[0:len(retval)-len(ext)]
+		}
+	}
+	return name,retval
+}
+
+/*
+ * parses the telemetrytoolpath arg, which can contain multiple comma-delimited
+ * paths.
+ */
+func PrepTelemTools(arg string) []*TelemTool {
+	ret := []*TelemTool{}
+
+	a := strings.Split(arg, ",")
+
+	for _, entry := range a {
+		obj := &TelemTool{}
+		obj.Path = filepath.FromSlash(entry)
+
+		obj.Name,obj.Suffix = GetToolNameAndSuffixFromPath(obj.Path)
+		ret = append(ret, obj)
+	}
+	return ret
+}
+
 func main() {
 
 	flag.Parse()
@@ -1183,8 +1345,6 @@ func main() {
 		fmt.Println(gSysInfo)
 	}
 
-	CallTelemetryPrepare(flagClearTelemetryCache)
-
 	if "" == flagResultsPath {
 
 		var err error
@@ -1202,6 +1362,8 @@ func main() {
 		}
 		
 	}
+
+	gTelemTools = PrepTelemTools(flagTelemetryToolPath)
 
 	err = utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &gAtomicTests)
 	if err != nil {
@@ -1237,6 +1399,10 @@ func main() {
 		}
 	}
 
+	if len(flagRevalidate) > 0 {
+		LoadSpecsForRevalidate(flagRevalidate, &gTestSpecs)
+	}
+
 	// parse list of wild-carded techniques user wants to execute
 
 	if false == ParseTestSpecs(flagTechniques) {
@@ -1263,10 +1429,17 @@ func main() {
 		//return
 	}
 
+	if len(flagRevalidate) > 0 {
+		Revalidate(flagRevalidate)
+		return
+	}
+
 	if gFlagNoRun {
 		fmt.Println("--norun specified. exiting without running tests")
 	} else {
 		go RunSignalHandler()
+
+		CallTelemetryPrepare(flagClearTelemetryCache)
 	}
 	RunTests()
 
