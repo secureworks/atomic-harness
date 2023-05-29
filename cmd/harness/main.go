@@ -1213,7 +1213,7 @@ func LoadSpecsForRevalidate(prevResultsDir string, dest *[]*types.TestSpec) {
 	}
 
 	for _,entry := range results {
-		if int(entry.Status) < int(types.StatusTestSuccess) {
+		if int(entry.Status) >= int(types.StatusTestSuccess) {
 			continue
 		}
 		spec := &types.TestSpec {}
