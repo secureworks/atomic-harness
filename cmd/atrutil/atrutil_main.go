@@ -287,7 +287,7 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 
 	percentage = float32(criteria) / float32(total)
 
-	fmt.Printf("%s Criteria coverage : %3.1f %% of %d atomic tests\n", flagPlatform, percentage * 100.0, total)
+	fmt.Printf("%s Criteria coverage : %3.1f %% of %d atomic tests\n", flagPlatform, percentage*100.0, total)
 
 	return percentage
 }
@@ -412,8 +412,8 @@ func GenerateCriteria(tid string) {
 	for i := range tests {
 
 		cur := yaml.AtomicTests[i]
-		tmp := strings.Join(cur.SupportedPlatforms,"|")
-                if !strings.Contains(tmp, flagPlatform) {
+		tmp := strings.Join(cur.SupportedPlatforms, "|")
+		if !strings.Contains(tmp, flagPlatform) {
 			continue
 		}
 		if "manual" == strings.ToLower(cur.Executor.Name) {

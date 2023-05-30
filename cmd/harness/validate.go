@@ -2,8 +2,8 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -13,17 +13,17 @@ import (
 )
 
 type ExtractState struct {
-	StartTime   uint64            `json:"start_time"`
-	EndTime     uint64            `json:"end_time"`
+	StartTime   uint64                  `json:"start_time"`
+	EndTime     uint64                  `json:"end_time"`
 	TestData    types.MitreTestCriteria `json:"test_data"`
-	TotalEvents uint64            `json:"total_events"`
-	NumMatches  uint64            `json:"num_matches"`
-	Coverage    float64           `json:"coverage"`
-	MatchingTag string            `json:"matching_tag",omitempty`
+	TotalEvents uint64                  `json:"total_events"`
+	NumMatches  uint64                  `json:"num_matches"`
+	Coverage    float64                 `json:"coverage"`
+	MatchingTag string                  `json:"matching_tag",omitempty`
 }
 
 var (
-	gValidateState        = ExtractState{}
+	gValidateState = ExtractState{}
 
 	// sh /tmp/artwork-T1560.002_3-458617291/goart-T1560.002-test.bash
 	gRxGoArtStage = regexp.MustCompile(`sh /tmp/(artwork-T[\w-_\.\d]+)/goart-(T[\d\._]+)-(\w+)`)
@@ -33,20 +33,20 @@ var (
 	gRxGoArtStageWin = regexp.MustCompile(`(POWERSHELL |CMD /c |pwsh ).*\\(artwork-T[\w-_\.\d]+)\\goart-(T[\d\._]+)-(\w+)`)
 )
 
-func CheckMatch(haystack,op,needle string) bool {
+func CheckMatch(haystack, op, needle string) bool {
 	if gDebug {
-		fmt.Println("CheckMatch",op,"\"" + haystack + "\"",needle)
+		fmt.Println("CheckMatch", op, "\""+haystack+"\"", needle)
 	}
 	switch op {
 	case "=":
 		return haystack == needle
 	case "~=":
-		return strings.Contains(haystack,needle)
+		return strings.Contains(haystack, needle)
 	case "*=":
 		// TODO: only want to compile this once
-		rx,err := regexp.Compile(needle)
+		rx, err := regexp.Compile(needle)
 		if err != nil {
-			fmt.Println("invalid regex",needle,err)
+			fmt.Println("invalid regex", needle, err)
 			return false
 		}
 		return rx.MatchString(haystack)
@@ -83,7 +83,7 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 
 	// pull out expected process event criteria and match
 
-	for _,exp := range testRun.criteria.ExpectedEvents {
+	for _, exp := range testRun.criteria.ExpectedEvents {
 		if exp.EventType != "Process" {
 			continue
 		}
@@ -133,8 +133,7 @@ func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 		}
 	}
 
-
-	for _,exp := range testRun.criteria.ExpectedEvents {
+	for _, exp := range testRun.criteria.ExpectedEvents {
 		if exp.EventType != "File" {
 			continue
 		}
@@ -204,7 +203,7 @@ func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 
 func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
 	retval := false
-	for _,exp := range gValidateState.TestData.ExpectedEvents {
+	for _, exp := range gValidateState.TestData.ExpectedEvents {
 
 		if strings.ToUpper(exp.EventType) != "NETFLOW" {
 			continue
@@ -212,20 +211,20 @@ func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 
 		// make regexes from subtype and all fieldchecks
 
-		s := strings.ReplaceAll(exp.SubType, "*",".*")
+		s := strings.ReplaceAll(exp.SubType, "*", ".*")
 		rx, err := regexp.Compile(strings.ToLower(s))
 		if err != nil {
-			fmt.Println("Invalid netflow regex",exp.SubType,err)
+			fmt.Println("Invalid netflow regex", exp.SubType, err)
 			continue
 		}
 
 		regexes := []*regexp.Regexp{rx}
 
-		for _,fc := range exp.FieldChecks {
-			s := strings.ReplaceAll(fc.Value, "*",".*")
+		for _, fc := range exp.FieldChecks {
+			s := strings.ReplaceAll(fc.Value, "*", ".*")
 			rx, err := regexp.Compile(strings.ToLower(s))
 			if err != nil {
-				fmt.Println("Invalid netflow regex",fc,err)
+				fmt.Println("Invalid netflow regex", fc, err)
 			}
 			regexes = append(regexes, rx)
 		}
@@ -233,9 +232,9 @@ func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 		// now check against FlowStr, FlowStrDns
 
 		if gVerbose {
-			fmt.Println("Netflow",evt.NetflowFields.FlowStr, exp.SubType)
+			fmt.Println("Netflow", evt.NetflowFields.FlowStr, exp.SubType)
 		}
-		for _,rx := range regexes {
+		for _, rx := range regexes {
 			matched := rx.MatchString(evt.NetflowFields.FlowStr)
 			if matched {
 				AddMatchingEvent(testRun, exp, evt)
@@ -286,9 +285,9 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 
 	// write native telemetry matches to a file
 	outpath := testRun.resultsDir + "/matches" + tool.Suffix + ".json"
-	matchFileHandle,err := os.OpenFile(outpath, os.O_CREATE|os.O_WRONLY, 0644)
+	matchFileHandle, err := os.OpenFile(outpath, os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		fmt.Println("ERROR: unable to create outfile",outpath, err)
+		fmt.Println("ERROR: unable to create outfile", outpath, err)
 	}
 
 	for i, line := range simpleLines {
@@ -296,7 +295,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 
 		err = json.Unmarshal([]byte(line), evt)
 		if err != nil {
-			fmt.Println("ERROR: parsing event",err, line)
+			fmt.Println("ERROR: parsing event", err, line)
 			continue
 		}
 
@@ -323,7 +322,7 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 
 			// did we get a technique match?
 			if 0 == len(gValidateState.MatchingTag) && len(evt.MitreTechniques) > 0 {
-				for _,tid := range evt.MitreTechniques {
+				for _, tid := range evt.MitreTechniques {
 					if strings.HasPrefix(tid, testRun.criteria.Technique) {
 						gValidateState.MatchingTag = tid
 						testRun.HasMitreTag = true
@@ -339,14 +338,14 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 
 	// save results to file
 
-	s := GetTelemTypes(& gValidateState.TestData)
+	s := GetTelemTypes(&gValidateState.TestData)
 	outPath := testRun.resultsDir + "/match_string" + tool.Suffix + ".txt"
 	err = os.WriteFile(outPath, []byte(s), 0644)
 	if err != nil {
 		fmt.Println("ERROR: unable to write file", outPath, err)
 	}
 
-	jb, err := json.MarshalIndent(gValidateState,"","  ")
+	jb, err := json.MarshalIndent(gValidateState, "", "  ")
 	if err != nil {
 		fmt.Println("failed to encode validation state json", err)
 	} else {
@@ -375,13 +374,13 @@ func UpdateCoverage() {
 	numExpected := len(gValidateState.TestData.ExpectedEvents) +
 		len(gValidateState.TestData.ExpectedCorrelations)
 
-	for _,exp := range gValidateState.TestData.ExpectedEvents {
-		if len(exp.Matches)  > 0 {
+	for _, exp := range gValidateState.TestData.ExpectedEvents {
+		if len(exp.Matches) > 0 {
 			numFound += 1
 		}
 	}
 
-	for _,exp := range gValidateState.TestData.ExpectedCorrelations {
+	for _, exp := range gValidateState.TestData.ExpectedCorrelations {
 		if exp.IsMet {
 			numFound += 1
 		}
@@ -397,29 +396,38 @@ func UpdateCoverage() {
 
 func GetTelemChar(exp *types.ExpectedEvent) string {
 	switch strings.ToUpper(exp.EventType) {
-	case "PROCESS": return "P"
-	case "NETFLOW": return "N"
+	case "PROCESS":
+		return "P"
+	case "NETFLOW":
+		return "N"
 	case "FILE":
 		if strings.ToUpper(exp.SubType) == "READ" {
 			return "f"
 		}
 		return "F"
-	case "FILEMOD": return "F"
+	case "FILEMOD":
+		return "F"
 		if strings.ToUpper(exp.SubType) == "READ" {
 			return "f"
 		}
 		return "F"
-	case "AUTH": return "A"
-	case "PTRACE": return "T"
-	case "NETSNIFF": return "S"
-	case "ALERT": return "W"
-	case "MODULE": return "M"
-	case "VOLUME": return "V"
+	case "AUTH":
+		return "A"
+	case "PTRACE":
+		return "T"
+	case "NETSNIFF":
+		return "S"
+	case "ALERT":
+		return "W"
+	case "MODULE":
+		return "M"
+	case "VOLUME":
+		return "V"
 	default:
 		break
 	}
 
-	fmt.Println("No char code for EventType:",exp.EventType)
+	fmt.Println("No char code for EventType:", exp.EventType)
 
 	return "?"
 }
@@ -439,7 +447,7 @@ func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
 	a := []string{}
 	i := 1
 	if utils.GetPlatformName() == "windows" {
-		i += 1  // in 2,3,4 indexes on windows
+		i += 1 // in 2,3,4 indexes on windows
 		a = gRxGoArtStageWin.FindStringSubmatch(cmdline)
 	} else {
 		a = gRxGoArtStage.FindStringSubmatch(cmdline)
@@ -453,7 +461,7 @@ func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
 	stageName := a[i+2]
 
 	if gVerbose {
-		fmt.Println("Found stage", stageName,"for", technique,"folder:",folder)
+		fmt.Println("Found stage", stageName, "for", technique, "folder:", folder)
 	}
 	if "test" == stageName {
 		// is this the target test?
@@ -501,7 +509,7 @@ func IsGoArtWorkDirEvent(testRun *SingleTestRun, evt *types.SimpleEvent) bool {
  */
 func GetTelemTypes(criteria *types.MitreTestCriteria) string {
 	s := ""
-	for _,exp := range criteria.ExpectedEvents {
+	for _, exp := range criteria.ExpectedEvents {
 		c := GetTelemChar(exp)
 		if len(exp.Matches) == 0 {
 			s += "<" + c + ">"
@@ -509,7 +517,7 @@ func GetTelemTypes(criteria *types.MitreTestCriteria) string {
 			s += c
 		}
 	}
-	for _,exp := range criteria.ExpectedCorrelations {
+	for _, exp := range criteria.ExpectedCorrelations {
 		c := "C"
 		if exp.IsMet == false {
 			s += "<" + c + ">"
@@ -534,17 +542,17 @@ func BoolAsString(val bool) string {
 func ReadFileLines(path string) ([]string, error) {
 	ret := []string{}
 
-    file, err := os.Open(path)
-    if err != nil {
-    	return ret, err
-    }
-    defer file.Close()
+	file, err := os.Open(path)
+	if err != nil {
+		return ret, err
+	}
+	defer file.Close()
 
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-    	line := scanner.Text()
-    	ret = append(ret, line)
-    }
+	scanner := bufio.NewScanner(file)
+	for scanner.Scan() {
+		line := scanner.Text()
+		ret = append(ret, line)
+	}
 
-    return ret, scanner.Err()
+	return ret, scanner.Err()
 }

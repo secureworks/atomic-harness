@@ -14,7 +14,6 @@ import (
 	"os"
 	"strings"
 
-
 	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
@@ -23,18 +22,18 @@ import (
 // rsync_server,rsync,,10.0.0.16,873,rsyncuser,rsyncpass531,
 
 type ServerConfig struct {
-	Id string
-	Type string
+	Id       string
+	Type     string
 	Hostname string
-	Addr string
-	Port string
+	Addr     string
+	Port     string
 	Username string
 	Password string
-	Pubkey string
+	Pubkey   string
 }
 
 func LoadServerConfigsCsv(path string, dest *map[string]string) error {
-	data, err := ioutil.ReadFile(path);
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -48,11 +47,11 @@ func LoadServerConfigsCsv(path string, dest *map[string]string) error {
 		log.Fatal(err)
 	}
 
-	for i,row := range records {
+	for i, row := range records {
 		if i == 0 {
-			continue; // skip header row
+			continue // skip header row
 		}
-		if len(row) == 0 || len(row[0])==0 || row[0][0] == '#' {
+		if len(row) == 0 || len(row[0]) == 0 || row[0][0] == '#' {
 			continue
 		}
 		if len(row) != 8 {
@@ -60,31 +59,31 @@ func LoadServerConfigsCsv(path string, dest *map[string]string) error {
 			continue
 		}
 
-		obj := &ServerConfig{row[0],row[1],row[2],row[3],row[4],row[5],row[6],row[7]}
+		obj := &ServerConfig{row[0], row[1], row[2], row[3], row[4], row[5], row[6], row[7]}
 
 		if obj.Hostname != "" {
-			(*dest)["$SERVER[" + obj.Id + "].addr"] = obj.Hostname
-			(*dest)["$SERVER[" + obj.Type + "].addr"] = obj.Hostname
+			(*dest)["$SERVER["+obj.Id+"].addr"] = obj.Hostname
+			(*dest)["$SERVER["+obj.Type+"].addr"] = obj.Hostname
 		}
 		if obj.Addr != "" {
-			(*dest)["$SERVER[" + obj.Id + "].addr"] = obj.Addr
-			(*dest)["$SERVER[" + obj.Type + "].addr"] = obj.Addr
+			(*dest)["$SERVER["+obj.Id+"].addr"] = obj.Addr
+			(*dest)["$SERVER["+obj.Type+"].addr"] = obj.Addr
 		}
 		if obj.Port != "" {
-			(*dest)["$SERVER[" + obj.Id + "].port"] = obj.Port
-			(*dest)["$SERVER[" + obj.Type + "].port"] = obj.Port
+			(*dest)["$SERVER["+obj.Id+"].port"] = obj.Port
+			(*dest)["$SERVER["+obj.Type+"].port"] = obj.Port
 		}
 		if obj.Username != "" {
-			(*dest)["$SERVER[" + obj.Id + "].username"] = obj.Username
-			(*dest)["$SERVER[" + obj.Type + "].username"] = obj.Username
+			(*dest)["$SERVER["+obj.Id+"].username"] = obj.Username
+			(*dest)["$SERVER["+obj.Type+"].username"] = obj.Username
 		}
 		if obj.Password != "" {
-			(*dest)["$SERVER[" + obj.Id + "].password"] = obj.Password
-			(*dest)["$SERVER[" + obj.Type + "].password"] = obj.Password
+			(*dest)["$SERVER["+obj.Id+"].password"] = obj.Password
+			(*dest)["$SERVER["+obj.Type+"].password"] = obj.Password
 		}
 		if obj.Pubkey != "" {
-			(*dest)["$SERVER[" + obj.Id + "].pubkey"] = obj.Pubkey
-			(*dest)["$SERVER[" + obj.Type + "].pubkey"] = obj.Pubkey
+			(*dest)["$SERVER["+obj.Id+"].pubkey"] = obj.Pubkey
+			(*dest)["$SERVER["+obj.Type+"].pubkey"] = obj.Pubkey
 		}
 	}
 
@@ -95,28 +94,28 @@ func LoadFailedTechniquesList(prevResultsDir string, dest *[]*types.TestSpec) er
 	results := []types.TestProgress{}
 
 	path := prevResultsDir
-	if !strings.HasSuffix(path,".json") {
+	if !strings.HasSuffix(path, ".json") {
 		path += "/status.json"
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
-		fmt.Println("Failed to load",path,err)
+		fmt.Println("Failed to load", path, err)
 		return err
 	}
 	if len(body) == 0 {
 		fmt.Println("status.json is empty")
 		return nil
 	}
-	if err = json.Unmarshal(body,&results); err != nil {
-		fmt.Println("failed to parse",path,err)
+	if err = json.Unmarshal(body, &results); err != nil {
+		fmt.Println("failed to parse", path, err)
 		return err
 	}
 
-	for _,entry := range results {
+	for _, entry := range results {
 		if entry.Status == types.StatusValidateSuccess || entry.Status == types.StatusSkipped {
 			continue
 		}
-		spec := &types.TestSpec {}
+		spec := &types.TestSpec{}
 
 		spec.Technique = entry.Technique
 		spec.TestIndex = entry.TestIndex

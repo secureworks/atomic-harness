@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package main
@@ -34,7 +35,7 @@ func GetHostname(dest *types.SysInfoVars) {
 }
 
 func GetIpAddrs(dest *types.SysInfoVars) error {
-	cmd := exec.Command("ip","addr")
+	cmd := exec.Command("ip", "addr")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return err
@@ -55,7 +56,7 @@ func GetIpAddrs(dest *types.SysInfoVars) error {
 
 func GetEnvInfo(dest *types.SysInfoVars) {
 	// these are set on ubuntu linux bash
-	dest.Username = os.Getenv("SUDO_USER")  // harness is supposed to be run using sudo
+	dest.Username = os.Getenv("SUDO_USER") // harness is supposed to be run using sudo
 	if len(dest.Hostname) == 0 {
 		dest.Hostname = os.Getenv("HOSTNAME")
 	}
@@ -66,23 +67,23 @@ func LazyGatewaySubnet(dest *types.SysInfoVars) {
 	if dest.Ipaddr4 == "" {
 		return
 	}
-	a := strings.SplitN(dest.Ipaddr4,".",4)
+	a := strings.SplitN(dest.Ipaddr4, ".", 4)
 	dest.Subnet = fmt.Sprintf("%s.%s.%s", a[0], a[1], a[2])
 	dest.Gateway = dest.Subnet + ".1"
 }
 
 func ParseIpAddrOutput(dest *types.SysInfoVars, s string) {
-	a := strings.SplitN(s,"\n",100)
+	a := strings.SplitN(s, "\n", 100)
 	currentIf := ""
-	for _,line := range a {
-		trimmed := strings.TrimLeft(line," \t")
+	for _, line := range a {
+		trimmed := strings.TrimLeft(line, " \t")
 		if len(trimmed) == 0 {
 			continue
 		}
 		if line[0] == trimmed[0] {
 			// interface line
 			// 2: ens33: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
-			tmp := strings.SplitN(line,":",3)
+			tmp := strings.SplitN(line, ":", 3)
 			ifname := strings.TrimSpace(tmp[1])
 
 			// ignore loopback
@@ -94,26 +95,25 @@ func ParseIpAddrOutput(dest *types.SysInfoVars, s string) {
 
 			// ignore links down
 
-			if strings.Contains(tmp[2],"state DOWN") {
+			if strings.Contains(tmp[2], "state DOWN") {
 				currentIf = ""
 				continue
 			}
-
 
 			currentIf = ifname
 			dest.Netif = ifname
 
 		} else if currentIf != "" {
 			// detail line
-			if strings.HasPrefix(trimmed,"inet6") {
-				// inet6 fe80::2705:2628:3cd2:1124/64 scope link noprefixroute 
-				tmp := strings.SplitN(trimmed," ",3)
-				tmp = strings.SplitN(tmp[1],"/",2)
+			if strings.HasPrefix(trimmed, "inet6") {
+				// inet6 fe80::2705:2628:3cd2:1124/64 scope link noprefixroute
+				tmp := strings.SplitN(trimmed, " ", 3)
+				tmp = strings.SplitN(tmp[1], "/", 2)
 				dest.Ipaddr6 = tmp[0]
-			} else if strings.HasPrefix(trimmed,"inet") {
+			} else if strings.HasPrefix(trimmed, "inet") {
 				// inet 10.0.0.6/24 brd 10.0.0.255 scope global dynamic noprefixroute ens33
-				tmp := strings.SplitN(trimmed," ",3)
-				tmp = strings.SplitN(tmp[1],"/",2)
+				tmp := strings.SplitN(trimmed, " ", 3)
+				tmp = strings.SplitN(tmp[1], "/", 2)
 				dest.Ipaddr4 = tmp[0]
 			}
 		}

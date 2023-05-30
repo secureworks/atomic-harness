@@ -70,8 +70,8 @@ func LoadAtomicsIndexCsvPlatform(atomicsPath string, dest *map[string][]*types.T
 		platform = GetPlatformName()
 	}
 	path = atomicsPath + "/Indexes/Indexes-CSV/" + platform + "-index.csv"
-	
-	data, err := ioutil.ReadFile(path);
+
+	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		return err
 	}
@@ -86,21 +86,21 @@ func LoadAtomicsIndexCsvPlatform(atomicsPath string, dest *map[string][]*types.T
 
 	// Tactic,Technique #,Technique Name,Test #,Test Name,Test GUID,Executor Name
 
-	for i,row := range records {
+	for i, row := range records {
 		if i == 0 {
-			continue; // skip header row
+			continue // skip header row
 		}
-		if len(row) < 6 || len(row[0])==0 || row[0][0] == '#' {
+		if len(row) < 6 || len(row[0]) == 0 || row[0][0] == '#' {
 			continue
 		}
-		spec := &types.TestSpec {}
+		spec := &types.TestSpec{}
 
 		spec.Technique = row[1]
 		spec.TestIndex = row[3]
 		spec.TestName = row[4]
 		spec.TestGuid = row[5]
 
-		_,ok := (*dest)[spec.Technique]
+		_, ok := (*dest)[spec.Technique]
 		if !ok {
 			(*dest)[spec.Technique] = []*types.TestSpec{}
 		}
@@ -109,7 +109,7 @@ func LoadAtomicsIndexCsvPlatform(atomicsPath string, dest *map[string][]*types.T
 		// So filter out duplicates. 65 duplicates found in linux index
 
 		notPresent := true
-		for _,entry := range (*dest)[spec.Technique] {
+		for _, entry := range (*dest)[spec.Technique] {
 			if spec.Technique == entry.Technique && spec.TestGuid == entry.TestGuid {
 				notPresent = false
 				break

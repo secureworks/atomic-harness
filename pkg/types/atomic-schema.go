@@ -31,11 +31,11 @@ type AtomicTest struct {
 	BaseDir string `yaml:"-"`
 	TempDir string `yaml:"tempdir"`
 
-	Status            int      `yaml:"test_status,omitempty"`
-	IsCleanedUp       bool     `yaml:"is_cleaned_up,omitempty"`
-	ArgsUsed          map[string]string     `yaml:"args_used,omitempty"`
-	StartTime         int64
-	EndTime           int64
+	Status      int               `yaml:"test_status,omitempty"`
+	IsCleanedUp bool              `yaml:"is_cleaned_up,omitempty"`
+	ArgsUsed    map[string]string `yaml:"args_used,omitempty"`
+	StartTime   int64
+	EndTime     int64
 }
 
 type InputArgument struct {

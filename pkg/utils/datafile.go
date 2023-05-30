@@ -31,21 +31,21 @@ func AtomicTestCriteriaNew(tid string, plat string, numstr string, name string) 
 		obj.TestGuid = numstr
 	} else {
 		// parse the 1-based test number
-		val, err := strconv.ParseUint(numstr,10,32)
+		val, err := strconv.ParseUint(numstr, 10, 32)
 		obj.TestIndex = uint(val)
 		if err != nil {
-			fmt.Println("ERROR: TestIndex is not an integer",numstr)
+			fmt.Println("ERROR: TestIndex is not an integer", numstr)
 		}
 	}
 	return obj
 }
 
 func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, error) {
-	a := strings.SplitN(str,"=",2)
+	a := strings.SplitN(str, "=", 2)
 	if len(a) != 2 {
 		if eventType == "FILE" {
 			// assume it's a path
-			a = []string{"path",str}
+			a = []string{"path", str}
 		} else {
 			return nil, fmt.Errorf("no operator")
 		}
@@ -55,7 +55,7 @@ func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, err
 	fc.Value = a[1]
 	namelen := len(fc.FieldName)
 
-	switch(fc.FieldName[namelen-1]) {
+	switch fc.FieldName[namelen-1] {
 	case '*':
 		fc.Op = "*="
 		namelen -= 1
@@ -69,7 +69,7 @@ func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, err
 	// TODO: trim whitespace on name, value
 	fc.FieldName = fc.FieldName[:namelen]
 
-	return fc,nil
+	return fc, nil
 }
 
 func EventFromRow(id int, row []string) types.ExpectedEvent {
@@ -87,13 +87,13 @@ func EventFromRow(id int, row []string) types.ExpectedEvent {
 		idx += 1
 	}
 	if ET == "NETSNIFF" {
-		obj.SubType = row[2] // 
+		obj.SubType = row[2] //
 		idx += 1
 	}
 	for i := idx; i < len(row); i++ {
 		entry, err := ParseFieldCriteria(row[i], ET)
 		if err != nil {
-			fmt.Println("ERROR: invalid FieldCriteria:" + row[i], err)
+			fmt.Println("ERROR: invalid FieldCriteria:"+row[i], err)
 			continue
 		}
 		obj.FieldChecks = append(obj.FieldChecks, *entry)
@@ -130,11 +130,11 @@ func LoadMitreTechniqueCsv(path string, dest *map[string]string) error {
 		log.Fatal(err)
 	}
 
-	for i,row := range records {
+	for i, row := range records {
 		if i == 0 {
-			continue; // skip header row
+			continue // skip header row
 		}
-		if len(row) < 3 || len(row[0])==0 || row[0][0] == '#' {
+		if len(row) < 3 || len(row[0]) == 0 || row[0][0] == '#' {
 			continue
 		}
 		(*dest)[row[0]] = row[2]
@@ -142,22 +142,20 @@ func LoadMitreTechniqueCsv(path string, dest *map[string]string) error {
 	return nil
 }
 
-
-
 func LoadAtomicDefaultArgs(criteria *types.AtomicTestCriteria, flagAtomicsPath string, isVerbose bool) {
 	var body []byte
 
 	// Check to see if test is defined locally first. If not, body will be nil
 	// and the test will be loaded below.
-	atomicsPath,_ := filepath.Abs(flagAtomicsPath)
+	atomicsPath, _ := filepath.Abs(flagAtomicsPath)
 	path := atomicsPath + "/" + criteria.Technique + "/" + criteria.Technique + ".yaml"
 	if isVerbose {
-		fmt.Println("loading",path)
+		fmt.Println("loading", path)
 	}
 	body, _ = os.ReadFile(path)
 	if len(body) == 0 {
-		path = strings.ReplaceAll(path,".yaml",".yml")
-		fmt.Println("loading",path)
+		path = strings.ReplaceAll(path, ".yaml", ".yml")
+		fmt.Println("loading", path)
 		body, _ = os.ReadFile(path)
 	}
 
@@ -175,7 +173,7 @@ func LoadAtomicDefaultArgs(criteria *types.AtomicTestCriteria, flagAtomicsPath s
 
 	for i, testInfo := range atoms.AtomicTests {
 		if criteria.TestIndex > 0 {
-			if ((criteria.TestIndex-1) != uint(i)) {
+			if (criteria.TestIndex - 1) != uint(i) {
 				continue
 			}
 		} else if len(criteria.TestGuid) > 0 {
@@ -186,20 +184,19 @@ func LoadAtomicDefaultArgs(criteria *types.AtomicTestCriteria, flagAtomicsPath s
 			fmt.Println("Criteria missing TestNum or TestGuid", criteria.Technique, criteria.TestIndex, criteria.TestGuid)
 			return
 		}
-		for name,obj := range testInfo.InputArugments {
-			_,ok := criteria.Args[name]
+		for name, obj := range testInfo.InputArugments {
+			_, ok := criteria.Args[name]
 			if ok {
 				continue // we have override value
 			}
 			if isVerbose {
-				fmt.Printf("  Loading default arg %s:'%s'\n",name,obj.Default)
+				fmt.Printf("  Loading default arg %s:'%s'\n", name, obj.Default)
 			}
 
-			val := strings.ReplaceAll(obj.Default,"$PathToAtomicsFolder",atomicsPath)
-			val = strings.ReplaceAll(val,"PathToAtomicsFolder",atomicsPath)
+			val := strings.ReplaceAll(obj.Default, "$PathToAtomicsFolder", atomicsPath)
+			val = strings.ReplaceAll(val, "PathToAtomicsFolder", atomicsPath)
 
 			criteria.Args[name] = val
 		}
 	}
 }
-
