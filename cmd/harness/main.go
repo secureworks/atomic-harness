@@ -509,8 +509,12 @@ func CallTelemetryPrepare(doClearCache bool) {
 	}
 
 	for _, tool := range gTelemTools {
-		// TODO: pass tool.Suffix as an arg?
-		cmd := exec.Command(tool.Path,"--prepare", clearArg,"--resultsdir", resultsDir)
+
+		suffix := tool.Suffix
+		if len(suffix) == 0 {
+			suffix = "''"
+		}
+		cmd := exec.Command(tool.Path,"--prepare", clearArg,"--resultsdir", resultsDir,"--suffix", suffix)
 
 		output, err := cmd.CombinedOutput()
 		if err != nil {
@@ -526,7 +530,7 @@ func CallTelemetryPrepare(doClearCache bool) {
 func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 
 	for _, tool := range gTelemTools {
-		// TODO: pass tool.Suffix as arg?
+
 		suffix := tool.Suffix
 		if len(suffix) == 0 {
 			suffix = "''"
