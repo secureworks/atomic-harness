@@ -386,6 +386,9 @@ func GenerateCriteria(tid string) {
 		// what error code should this return? for 'not found'?
 		os.Exit(1)
 	}
+	if len(tests) == 0 {
+		return
+	}
 
 	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
 
@@ -409,9 +412,8 @@ func GenerateCriteria(tid string) {
 
 	defer outfile.Close()
 
-	for i := range tests {
+	for _,cur := range yaml.AtomicTests {
 
-		cur := yaml.AtomicTests[i]
 		tmp := strings.Join(cur.SupportedPlatforms, "|")
 		if !strings.Contains(tmp, flagPlatform) {
 			continue
@@ -424,7 +426,7 @@ func GenerateCriteria(tid string) {
 
 		guid := strings.Split(cur.GUID, "-")[0]
 
-		testName := strings.Replace(yaml.AtomicTests[i].Name, "\n", "", -1)
+		testName := strings.Replace(cur.Name, "\n", "", -1)
 
 		generatedCriteria := []string{tid, flagPlatform, guid, testName}
 
