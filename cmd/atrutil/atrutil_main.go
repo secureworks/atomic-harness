@@ -11,6 +11,7 @@ import (
 	//"log"
 	"os"
 	"path/filepath"
+	"regexp"
 
 	//"regexp"
 	//"runtime"
@@ -29,7 +30,9 @@ var flagAtomicsPath string
 var flagPlatform string
 var flagGenCriteria string
 var flagGenCriteriaOutPath string
+var gGenCriteriaAll = false
 var gVerbose = false
+var gUnsafe = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
 var gFindTestCoverage = false
@@ -39,6 +42,8 @@ func init() {
 	flag.StringVar(&flagAtomicsPath, "atomicspath", "", "path to local atomics folder")
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
 	flag.BoolVar(&gPatchCriteriaRefsMode, "patch_criteria_refs", false, "will update criteria file test numbers with GUIDs")
+	flag.BoolVar(&gUnsafe, "unsafe", false, "allow potentially destructive tests that may delete important file systems. Defaults to false.")
+	flag.BoolVar(&gGenCriteriaAll, "genall", false, "generate criteria for ALL atomic tests")
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
 	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
@@ -368,6 +373,8 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 func GenerateCriteria(tid string) {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
+	var unsafeRegex = regexp.MustCompile(`(\s|^)(rm|del|remove|Remove-Item|rmdir)(\s|$)`)
+
 	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
 	if err != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
@@ -412,7 +419,7 @@ func GenerateCriteria(tid string) {
 
 	defer outfile.Close()
 
-	for _,cur := range yaml.AtomicTests {
+	for _, cur := range yaml.AtomicTests {
 
 		tmp := strings.Join(cur.SupportedPlatforms, "|")
 		if !strings.Contains(tmp, flagPlatform) {
@@ -451,9 +458,18 @@ func GenerateCriteria(tid string) {
 			if len(com) == 0 {
 				continue
 			}
+
+			if !gUnsafe {
+				if unsafeRegex.MatchString(com) {
+					s += "!!!\n"
+					s += "FYI,Potentially destructive command found: " + com
+				}
+			}
+
 			out := []string{"_E_", "Process", "cmdline~=" + com}
 			s += strings.Join(out, ",")
 			s += fmt.Sprintln()
+
 		}
 
 		outfile.WriteString(s)
@@ -467,6 +483,104 @@ func GenerateCriteria(tid string) {
 
 }
 
+func GenerateAllCriteria() {
+	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
+
+	errRead := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &atomicTests)
+	if errRead != nil {
+		fmt.Println("Unable to load Indexes-CSV file for Atomics", errRead)
+	}
+	var unsafeRegex = regexp.MustCompile(`(\s|^)(rm|del|remove|Remove-Item|rmdir)(\s|$)`)
+
+	for _, entries := range atomicTests {
+		for _, t := range entries {
+			yaml, err := utils.LoadAtomicsTechniqueYaml(t.Technique, flagAtomicsPath)
+
+			if err != nil {
+				fmt.Println("Could not load Yaml for ", t.Technique)
+				continue
+			}
+			var outfile *os.File
+
+			if len(flagGenCriteriaOutPath) > 0 {
+				var writeErr error
+				outfile, writeErr = os.OpenFile(flagGenCriteriaOutPath+"/"+t.Technique+".generated.csv", os.O_CREATE|os.O_WRONLY, 0644)
+
+				if writeErr != nil {
+					fmt.Println("ERROR: unable to create outfile", flagGenCriteriaOutPath+t.Technique+".generated.csv", writeErr)
+					os.Exit(2)
+				}
+			} else {
+				outfile = os.Stdout
+			}
+
+			defer outfile.Close()
+
+			for _, cur := range yaml.AtomicTests {
+
+				tmp := strings.Join(cur.SupportedPlatforms, "|")
+				if !strings.Contains(tmp, flagPlatform) {
+					continue
+				}
+				if "manual" == strings.ToLower(cur.Executor.Name) {
+					continue
+				}
+
+				//create readable variable names for criteria string array
+
+				guid := strings.Split(cur.GUID, "-")[0]
+
+				testName := strings.Replace(cur.Name, "\n", "", -1)
+
+				generatedCriteria := []string{t.Technique, flagPlatform, guid, testName}
+
+				s := strings.Join(generatedCriteria, ",")
+
+				s += fmt.Sprintln()
+
+				//if this code were to be reused for non-generated tests, remove this statement
+				genDisclaimer := []string{"FYI", "Auto-generated please review"}
+				s += strings.Join(genDisclaimer, ",")
+
+				s += fmt.Sprintln()
+
+				// put input args in criteria, so they can be easily changed
+
+				for name, val := range cur.InputArugments {
+					s += fmt.Sprintf("ARG,%s,%s\n", name, val.Default)
+				}
+
+				//DEFAULT: Treat each command as a process event and use cmdline contains (~=) to show which command is run
+				for _, com := range strings.Split(cur.Executor.Command, "\n") {
+					if len(com) == 0 {
+						continue
+					}
+
+					if !gUnsafe {
+						if unsafeRegex.MatchString(com) {
+							s += "!!!\n"
+							s += fmt.Sprintln()
+							s += "FYI,Potentially destructive command found: " + com
+						}
+					}
+					out := []string{"_E_", "Process", "cmdline~=" + com}
+					s += strings.Join(out, ",")
+					s += fmt.Sprintln()
+
+				}
+
+				outfile.WriteString(s)
+
+				//ensure a new line between every generated criteria
+				fmt.Fprintln(outfile)
+			}
+			if len(flagGenCriteriaOutPath) > 0 {
+				fmt.Println("Generated Criteria for", t.Technique, "available at ", flagGenCriteriaOutPath+"/"+t.Technique+".generated.csv")
+			}
+		}
+	}
+}
+
 // fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
 
 func main() {
@@ -476,6 +590,10 @@ func main() {
 	}
 
 	FillInToolPathDefaults()
+
+	if gGenCriteriaAll {
+		GenerateAllCriteria()
+	}
 
 	if gPatchCriteriaRefsMode {
 		PatchCriteriaGuids()
