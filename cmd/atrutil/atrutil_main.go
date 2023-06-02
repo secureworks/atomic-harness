@@ -382,40 +382,22 @@ func (r *GenCriteriaError) Error() string {
 	return fmt.Sprintf("status %d: err %v", r.StatusCode, r.Err)
 }
 
-func GenerateCriteria(tid string) error {
-	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
+func GenerateCriteria(tid string) *GenCriteriaError {
+
+	//var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
 	var unsafeRegex = regexp.MustCompile(`(\s|^)(rm|del|remove|Remove-Item|rmdir)(\s|$)`)
 
-	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
-	if err != nil {
-		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
-		os.Exit(1)
-	}
-
-	if gVerbose {
-		fmt.Println("Searching for test", tid)
-	}
-
-	tests, ok := atomicTests[tid]
-
-	if !ok {
-		if gVerbose {
-			fmt.Println("An atomic test does not exist for this technique:", tid, "It could be an old copy of atomic-red-team repo or a fork or the criteria specifies an invalid technique")
+	/*
+		err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
+		if err != nil {
+			fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
+			os.Exit(1)
 		}
-		return &GenCriteriaError{
-			StatusCode: 404,
-			Err:        errors.New("Unable to locate atomic test"),
-		}
-	}
+
+	*/
 
 	// if no tests are present, return error code 422 (standard for 'Unprocessable Entity')
-	if len(tests) == 0 {
-		return &GenCriteriaError{
-			StatusCode: 422,
-			Err:        errors.New("No tests are provided"),
-		}
-	}
 
 	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
 
@@ -434,13 +416,15 @@ func GenerateCriteria(tid string) error {
 
 		if writeErr != nil {
 			fmt.Println("ERROR: unable to create outfile", flagGenCriteriaOutPath+tid+".generated.csv", writeErr)
-			os.Exit(2)
+			return &GenCriteriaError{
+				StatusCode: 100,
+				Err:        errors.New("Unable to load Yaml for " + tid),
+			}
 		}
+		defer outfile.Close()
 	} else {
 		outfile = os.Stdout
 	}
-
-	defer outfile.Close()
 
 	for _, cur := range yaml.AtomicTests {
 
@@ -502,8 +486,9 @@ func GenerateCriteria(tid string) error {
 		//ensure a new line between every generated criteria
 		fmt.Fprintln(outfile)
 	}
+
 	if len(flagGenCriteriaOutPath) > 0 {
-		fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
+		fmt.Println("Generated Criteria for", tid, flagGenCriteriaOutPath+tid+".generated.csv")
 	}
 
 	return &GenCriteriaError{
@@ -513,19 +498,33 @@ func GenerateCriteria(tid string) error {
 }
 
 //
-func GenerateAllCriteria() {
+func GenerateAllCriteria() error {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
 	errRead := utils.LoadAtomicsIndexCsv(filepath.FromSlash(flagAtomicsPath), &atomicTests)
+
 	if errRead != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", errRead)
+		os.Exit(1)
 	}
 
 	for _, entries := range atomicTests {
-		for _, t := range entries {
-			GenerateCriteria(t.Technique)
+		for _, test := range entries {
+
+			if gVerbose {
+				fmt.Println("Searching for test", test.Technique)
+			}
+
+			GenerateCriteria(test.Technique)
+
 		}
 	}
+
+	return &GenCriteriaError{
+		StatusCode: 200,
+		Err:        errors.New("All Criteria Generated Successfully"),
+	}
+
 }
 
 // fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
@@ -556,7 +555,6 @@ func main() {
 		FindTestCoverage()
 		return
 	}
-
 	if len(flagCriteriaPath) > 0 {
 		GenerateCriteria(strings.ToUpper(flagGenCriteria))
 		return
