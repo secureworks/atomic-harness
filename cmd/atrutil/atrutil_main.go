@@ -9,6 +9,7 @@ import (
 	"io/ioutil" // TODO: shouldn't need this anymore
 
 	//"log"
+	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -370,7 +371,18 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 	return criteria
 }
 
-func GenerateCriteria(tid string) {
+// Custom error specifically for the Generate Criteria Function
+type GenCriteriaError struct {
+	StatusCode int
+
+	Err error
+}
+
+func (r *GenCriteriaError) Error() string {
+	return fmt.Sprintf("status %d: err %v", r.StatusCode, r.Err)
+}
+
+func GenerateCriteria(tid string) error {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
 	var unsafeRegex = regexp.MustCompile(`(\s|^)(rm|del|remove|Remove-Item|rmdir)(\s|$)`)
@@ -386,22 +398,33 @@ func GenerateCriteria(tid string) {
 	}
 
 	tests, ok := atomicTests[tid]
+
 	if !ok {
 		if gVerbose {
 			fmt.Println("An atomic test does not exist for this technique:", tid, "It could be an old copy of atomic-red-team repo or a fork or the criteria specifies an invalid technique")
 		}
-		// what error code should this return? for 'not found'?
-		os.Exit(1)
+		return &GenCriteriaError{
+			StatusCode: 404,
+			Err:        errors.New("Unable to locate atomic test"),
+		}
 	}
+
+	// if no tests are present, return error code 422 (standard for 'Unprocessable Entity')
 	if len(tests) == 0 {
-		return
+		return &GenCriteriaError{
+			StatusCode: 422,
+			Err:        errors.New("No tests are provided"),
+		}
 	}
 
 	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
 
 	if err != nil {
 		fmt.Println("Could not load Yaml for ", tid)
-		os.Exit(1)
+		return &GenCriteriaError{
+			StatusCode: 503,
+			Err:        errors.New("Unable to load Yaml for " + tid),
+		}
 	}
 	var outfile *os.File
 
@@ -443,6 +466,7 @@ func GenerateCriteria(tid string) {
 
 		//if this code were to be reused for non-generated tests, remove this statement
 		genDisclaimer := []string{"FYI", "Auto-generated please review"}
+
 		s += strings.Join(genDisclaimer, ",")
 
 		s += fmt.Sprintln()
@@ -460,9 +484,10 @@ func GenerateCriteria(tid string) {
 			}
 
 			if !gUnsafe {
-				if unsafeRegex.MatchString(com) {
+				match := unsafeRegex.FindString(com)
+				if len(match) > 0 {
 					s += "!!!\n"
-					s += "FYI,Potentially destructive command found: " + com
+					s += "FYI,Potentially destructive command found. Keyword: " + match + "\n"
 				}
 			}
 
@@ -481,8 +506,13 @@ func GenerateCriteria(tid string) {
 		fmt.Println("Generated Criteria for", tid, "available at ./data/generated/"+tid+".generated.csv")
 	}
 
+	return &GenCriteriaError{
+		StatusCode: 200,
+		Err:        errors.New("Criteria Generated for " + tid + " Successfully"),
+	}
 }
 
+//
 func GenerateAllCriteria() {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
@@ -490,93 +520,10 @@ func GenerateAllCriteria() {
 	if errRead != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", errRead)
 	}
-	var unsafeRegex = regexp.MustCompile(`(\s|^)(rm|del|remove|Remove-Item|rmdir)(\s|$)`)
 
 	for _, entries := range atomicTests {
 		for _, t := range entries {
-			yaml, err := utils.LoadAtomicsTechniqueYaml(t.Technique, flagAtomicsPath)
-
-			if err != nil {
-				fmt.Println("Could not load Yaml for ", t.Technique)
-				continue
-			}
-			var outfile *os.File
-
-			if len(flagGenCriteriaOutPath) > 0 {
-				var writeErr error
-				outfile, writeErr = os.OpenFile(flagGenCriteriaOutPath+"/"+t.Technique+".generated.csv", os.O_CREATE|os.O_WRONLY, 0644)
-
-				if writeErr != nil {
-					fmt.Println("ERROR: unable to create outfile", flagGenCriteriaOutPath+t.Technique+".generated.csv", writeErr)
-					os.Exit(2)
-				}
-			} else {
-				outfile = os.Stdout
-			}
-
-			defer outfile.Close()
-
-			for _, cur := range yaml.AtomicTests {
-
-				tmp := strings.Join(cur.SupportedPlatforms, "|")
-				if !strings.Contains(tmp, flagPlatform) {
-					continue
-				}
-				if "manual" == strings.ToLower(cur.Executor.Name) {
-					continue
-				}
-
-				//create readable variable names for criteria string array
-
-				guid := strings.Split(cur.GUID, "-")[0]
-
-				testName := strings.Replace(cur.Name, "\n", "", -1)
-
-				generatedCriteria := []string{t.Technique, flagPlatform, guid, testName}
-
-				s := strings.Join(generatedCriteria, ",")
-
-				s += fmt.Sprintln()
-
-				//if this code were to be reused for non-generated tests, remove this statement
-				genDisclaimer := []string{"FYI", "Auto-generated please review"}
-				s += strings.Join(genDisclaimer, ",")
-
-				s += fmt.Sprintln()
-
-				// put input args in criteria, so they can be easily changed
-
-				for name, val := range cur.InputArugments {
-					s += fmt.Sprintf("ARG,%s,%s\n", name, val.Default)
-				}
-
-				//DEFAULT: Treat each command as a process event and use cmdline contains (~=) to show which command is run
-				for _, com := range strings.Split(cur.Executor.Command, "\n") {
-					if len(com) == 0 {
-						continue
-					}
-
-					if !gUnsafe {
-						if unsafeRegex.MatchString(com) {
-							s += "!!!\n"
-							s += fmt.Sprintln()
-							s += "FYI,Potentially destructive command found: " + com
-						}
-					}
-					out := []string{"_E_", "Process", "cmdline~=" + com}
-					s += strings.Join(out, ",")
-					s += fmt.Sprintln()
-
-				}
-
-				outfile.WriteString(s)
-
-				//ensure a new line between every generated criteria
-				fmt.Fprintln(outfile)
-			}
-			if len(flagGenCriteriaOutPath) > 0 {
-				fmt.Println("Generated Criteria for", t.Technique, "available at ", flagGenCriteriaOutPath+"/"+t.Technique+".generated.csv")
-			}
+			GenerateCriteria(t.Technique)
 		}
 	}
 }
