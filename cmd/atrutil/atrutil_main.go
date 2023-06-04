@@ -12,7 +12,7 @@ import (
 	"os"
 	"path/filepath"
 
-	//"regexp"
+	"regexp"
 	//"runtime"
 	"strconv"
 	"strings"
@@ -33,6 +33,9 @@ var gVerbose = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
 var gFindTestCoverage = false
+
+// sh /tmp/artwork-T1560.002_3-458617291/goart-T1560.002-test.bash
+var gRxUnixRedirect = regexp.MustCompile(`\d?>>?[ ]?([#{}._/\-0-9A-Za-z ]+)`)
 
 func init() {
 	flag.StringVar(&flagCriteriaPath, "criteriapath", "", "path to folder containing CSV files used to validate telemetry")
@@ -366,20 +369,75 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 }
 
 func stripCommandComment(cmd string, executorName string) (string, string) {
-	if len(cmd)== 0 || executorName == "powershell" || executorName == "command_prompt" {
-		return cmd,""
+	if len(cmd) == 0 || executorName == "powershell" || executorName == "command_prompt" {
+		return cmd, ""
 	}
 
-	// unix shells
+	// unix shells comments start with '#'
+
+	// first, mask out the parameter parts like  #{param}
 
 	tmp := strings.ReplaceAll(cmd, "#{", "^%")
-	parts := strings.Split(tmp,"#")
+
+	// now see if any comments exist
+
+	parts := strings.Split(tmp, "#")
 	if len(parts) <= 1 {
-		return cmd,""
+		return cmd, ""
 	}
+
+	// only consider the last one
+
 	comment := parts[len(parts)-1]
-	return cmd[0:len(cmd)-len(comment)-1], comment
+	return cmd[0 : len(cmd)-len(comment)-1], comment
 }
+
+// given a string of piped unix commands, return array of the individual
+// commands.
+// examples:
+//
+//	in1:  "/bin/ls /tmp/"
+//	out1: [ "/bin/ls /tmp/" ]
+//	in2:  "ls /etc | grep pa | sort"
+//	out2: [ "ls /etc/ " " grep pa " " sort" ]
+func SplitPipedCommands(cmd string, executorName string) []string {
+	if len(cmd) == 0 || executorName == "powershell" || executorName == "command_prompt" {
+		return []string{cmd}
+	}
+	ret := strings.Split(cmd, "|")
+	return ret
+}
+
+// given a unix command with file redirects, return command and array
+// of file path targets
+// example:
+//
+//	in1:  "/bin/myexe 2>/dev/null >> /tmp/abc"
+//	out1: "/bin/myexe " [ "/dev/null" "/tmp/abc" ]
+func extractFileRedirects(cmd string, executorName string) (string, []string) {
+	paths := []string{}
+	if len(cmd) == 0 || executorName == "powershell" || executorName == "command_prompt" {
+		return cmd, paths
+	}
+
+	// look for ''> some_file',  '>> some_file', '2>' and '1>'
+	matches := gRxUnixRedirect.FindAllStringSubmatch(cmd, -1)
+
+	for _, matcha := range matches {
+		if len(matcha) < 2 {
+			continue
+		}
+		redirect := matcha[0]
+		filepath := strings.TrimSpace(matcha[1])
+
+		cmd = strings.ReplaceAll(cmd, redirect, "")
+		paths = append(paths, filepath)
+	}
+
+	return cmd, paths
+}
+
+// TODO: func splitPipedCommands(cmd string) []string {}
 
 func GenerateCriteria(tid string) {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
@@ -428,7 +486,7 @@ func GenerateCriteria(tid string) {
 
 	defer outfile.Close()
 
-	for _,cur := range yaml.AtomicTests {
+	for _, cur := range yaml.AtomicTests {
 
 		tmp := strings.Join(cur.SupportedPlatforms, "|")
 		if !strings.Contains(tmp, flagPlatform) {
@@ -463,19 +521,37 @@ func GenerateCriteria(tid string) {
 		}
 
 		//DEFAULT: Treat each command as a process event and use cmdline contains (~=) to show which command is run
-		for _, com := range strings.Split(cur.Executor.Command, "\n") {
-			if len(com) == 0 {
+		for _, rawcom := range strings.Split(cur.Executor.Command, "\n") {
+			if len(rawcom) == 0 {
 				continue
 			}
-			com, comment := stripCommandComment(com, cur.Executor.Name)
-			if len(com) == 0 {
-				continue
+
+			pipedCommands := SplitPipedCommands(rawcom, cur.Executor.Name)
+			if len(pipedCommands) > 1 {
+				s += fmt.Sprintln("# " + rawcom)
+
 			}
-			out := []string{"_E_", "Process", "cmdline~=" + com}
-			s += strings.Join(out, ",") // TODO: CSV comma quoting
-			s += fmt.Sprintln()
-			if len(comment) > 0 {
-				s+= fmt.Sprintln("# " + comment)
+
+			for _, com := range pipedCommands {
+				com, comment := stripCommandComment(com, cur.Executor.Name)
+				if len(com) == 0 {
+					continue
+				}
+
+				com, redirectTargets := extractFileRedirects(com, cur.Executor.Name)
+
+				out := []string{"_E_", "Process", "cmdline~=" + com}
+				s += strings.Join(out, ",") // TODO: CSV comma quoting
+				s += fmt.Sprintln()
+				if len(comment) > 0 {
+					s += fmt.Sprintln("# " + comment)
+				}
+
+				for _, targetFile := range redirectTargets {
+					out := []string{"_E_", "File", "WRITE", "path~=" + targetFile}
+					s += strings.Join(out, ",") // TODO: CSV comma quoting
+					s += fmt.Sprintln()
+				}
 			}
 		}
 
