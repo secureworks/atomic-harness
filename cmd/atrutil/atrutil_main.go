@@ -365,6 +365,22 @@ func FindCoverage(filename string, atomicMap map[string][]*types.TestSpec) int {
 	return criteria
 }
 
+func stripCommandComment(cmd string, executorName string) (string, string) {
+	if len(cmd)== 0 || executorName == "powershell" || executorName == "command_prompt" {
+		return cmd,""
+	}
+
+	// unix shells
+
+	tmp := strings.ReplaceAll(cmd, "#{", "^%")
+	parts := strings.Split(tmp,"#")
+	if len(parts) <= 1 {
+		return cmd,""
+	}
+	comment := parts[len(parts)-1]
+	return cmd[0:len(cmd)-len(comment)-1], comment
+}
+
 func GenerateCriteria(tid string) {
 	var atomicTests = map[string][]*types.TestSpec{} // tid -> tests
 
@@ -393,7 +409,7 @@ func GenerateCriteria(tid string) {
 	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
 
 	if err != nil {
-		fmt.Println("Could not load Yaml for ", tid)
+		fmt.Println("Could not load Yaml for ", tid, err)
 		os.Exit(1)
 	}
 	var outfile *os.File
@@ -451,9 +467,16 @@ func GenerateCriteria(tid string) {
 			if len(com) == 0 {
 				continue
 			}
+			com, comment := stripCommandComment(com, cur.Executor.Name)
+			if len(com) == 0 {
+				continue
+			}
 			out := []string{"_E_", "Process", "cmdline~=" + com}
-			s += strings.Join(out, ",")
+			s += strings.Join(out, ",") // TODO: CSV comma quoting
 			s += fmt.Sprintln()
+			if len(comment) > 0 {
+				s+= fmt.Sprintln("# " + comment)
+			}
 		}
 
 		outfile.WriteString(s)
