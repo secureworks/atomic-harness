@@ -31,7 +31,6 @@ var flagAtomicsPath string
 var flagPlatform string
 var flagGenCriteria string
 var flagGenCriteriaOutPath string
-var gGenCriteriaAll = false
 var gVerbose = false
 var gUnsafe = false
 var gPatchCriteriaRefsMode = false
@@ -47,7 +46,6 @@ func init() {
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
 	flag.BoolVar(&gPatchCriteriaRefsMode, "patch_criteria_refs", false, "will update criteria file test numbers with GUIDs")
 	flag.BoolVar(&gUnsafe, "unsafe", false, "allow potentially destructive tests that may delete important file systems. Defaults to false.")
-	flag.BoolVar(&gGenCriteriaAll, "genall", false, "generate criteria for ALL atomic tests")
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
 	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
