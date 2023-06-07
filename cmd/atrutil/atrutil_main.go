@@ -36,6 +36,7 @@ var gUnsafe = false
 var gPatchCriteriaRefsMode = false
 var gFindTestVal string
 var gFindTestCoverage = false
+var flagListCriteriaMode = false
 
 // sh /tmp/artwork-T1560.002_3-458617291/goart-T1560.002-test.bash
 var gRxUnixRedirect = regexp.MustCompile(`\d?>>?[ ]?([#{}._/\-0-9A-Za-z ]+)`)
@@ -51,6 +52,7 @@ func init() {
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
 	flag.StringVar(&flagGenCriteria, "gencriteria", "", "supply name of test (Ex: T1070.004) and the CSV for the criteria will be outputted")
 	flag.StringVar(&flagGenCriteriaOutPath, "outfile", "", "supply name of directory to store generated criteria in csv form (requires gencriteria flag)")
+	flag.BoolVar(&flagListCriteriaMode,"listcriteria",false,"list test for each criteria CSV file")
 }
 
 func ToInt64(valstr string) int64 {
@@ -613,7 +615,88 @@ func GenerateAllCriteria() error {
 
 }
 
-// fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
+func ListCriteriaInFile(filename string) ([]string,error) {
+	retval := []string{}
+	mapTech := map[string]bool{}
+
+	filename = filepath.FromSlash(filename)
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return retval,err
+	}
+
+	r := csv.NewReader(bytes.NewReader(data))
+	r.LazyQuotes = true
+	r.Comment = '#'
+	r.FieldsPerRecord = -1 // no validation on num columns per row
+
+	records, err := r.ReadAll()
+	if err != nil {
+		fmt.Println("ERROR parsing CSV",filename,err)
+		return retval,err
+	}
+
+	for _, row := range records {
+
+		if 3 != len(row[0]) {
+
+			if len(row[0]) < 3 {
+				continue
+			}
+			if row[0][0] == '#' {
+				continue
+			}
+			if row[0][0] == 'T' {
+				techniqueId := row[0]
+				mapTech[techniqueId] = true
+			} else {
+				// ignore
+			}
+		} else {
+			// ignore
+		}
+	}
+
+	// extract keys from map into array
+
+	for key,_ := range mapTech {
+		retval = append(retval, key)
+	}
+
+	return retval,nil
+}
+
+func ListCriteria(dirPath string) bool {
+	dirPath = filepath.FromSlash(dirPath)
+	allfiles, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		fmt.Println("ERROR: unable to list files in "+dirPath, err)
+		return false
+	}
+	for _, f := range allfiles {
+		if !strings.HasSuffix(f.Name(), ".csv") {
+			continue
+		}
+		if strings.Contains(f.Name(), "_withguids") {
+			continue
+		}
+
+		if gVerbose {
+			fmt.Println("Loading " + f.Name())
+		}
+
+		techniqueIds, err := ListCriteriaInFile(filepath.FromSlash(dirPath+"/"+f.Name()))
+		if err != nil {
+			fmt.Println("ERROR:", err)
+			return false
+		} else {
+			fmt.Println(f.Name(),techniqueIds)
+		}
+	}
+
+	return true
+}
+
 
 func main() {
 	flag.Parse()
@@ -626,6 +709,11 @@ func main() {
 
 	if gPatchCriteriaRefsMode {
 		PatchCriteriaGuids()
+		return
+	}
+
+	if flagListCriteriaMode {
+		ListCriteria(flagCriteriaPath)
 		return
 	}
 
