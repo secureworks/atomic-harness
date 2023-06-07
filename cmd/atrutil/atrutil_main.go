@@ -4,9 +4,9 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/csv"
-	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil" // TODO: shouldn't need this anymore
 
 	//"log"
@@ -449,7 +449,7 @@ func GenerateCriteria(tid string) error {
 	err := utils.LoadAtomicsIndexCsvPlatform(filepath.FromSlash(flagAtomicsPath), &atomicTests, flagPlatform)
 	if err != nil {
 		fmt.Println("Unable to load Indexes-CSV file for Atomics", err)
-		return errors.New("EOF")
+		return io.EOF
 	}
 
 	if gVerbose {
@@ -463,19 +463,19 @@ func GenerateCriteria(tid string) error {
 			fmt.Println("An atomic test does not exist for this technique:", tid, "It could be an old copy of atomic-red-team repo or a fork or the criteria specifies an invalid technique")
 		}
 		// what error code should this return? for 'not found'?
-		return errors.New("EOF")
+		return io.EOF
 	}
 
 	// if no tests are present, return error code 422 (standard for 'Unprocessable Entity')
 	if len(tests) == 0 {
-		return errors.New("EOF")
+		return io.EOF
 	}
 
 	yaml, err := utils.LoadAtomicsTechniqueYaml(tid, flagAtomicsPath)
 
 	if err != nil {
 		fmt.Println("Could not load Yaml for ", tid, err)
-		return errors.New("Failed to Load")
+		return io.ErrClosedPipe
 	}
 	var outfile *os.File
 
@@ -485,7 +485,7 @@ func GenerateCriteria(tid string) error {
 
 		if writeErr != nil {
 			fmt.Println("ERROR: unable to create outfile", flagGenCriteriaOutPath+tid+".generated.csv", writeErr)
-			return errors.New("io: read/write on closed pipe")
+			return io.ErrClosedPipe
 		}
 		defer outfile.Close()
 	} else {
@@ -547,8 +547,7 @@ func GenerateCriteria(tid string) error {
 
 				if !gUnsafe {
 					if unsafeRegex.MatchString(com) {
-						s += "!!!\n"
-						s += "FYI,Potentially destructive command found: " + com
+						s += "!!!, Potentially destructive command found: " + com
 					}
 				}
 
