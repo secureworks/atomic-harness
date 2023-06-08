@@ -23,6 +23,8 @@ import (
 // with the default timeout settings, this test is unable to run to completion. If you would like to test it, either change the default timeout to about 3 minutes,
 // or change the git log command to be since an earlier date
 
+/*
+Slow test: best not to run automatically
 func TestCommitDate(t *testing.T) {
 	// this can be changed to your criteria path
 	criteriaPath := "../../atomic-validation-criteria"
@@ -37,6 +39,7 @@ func TestCommitDate(t *testing.T) {
 	assert.NotEqual(t, "2023-05-21 11:44:44 -0700", FindCriteriaCommitDates(criteriaPath)["T1003.001"])
 
 }
+*/
 
 func TestTranslateDates(t *testing.T) {
 
