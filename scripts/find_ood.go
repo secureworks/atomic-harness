@@ -25,7 +25,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -33,7 +32,6 @@ import (
 var flagCriteriaPath string
 var flagAtomicsPath string
 var gVerbose = false
-var gMissing = false
 var flagOutPath string
 
 func init() {
@@ -41,7 +39,6 @@ func init() {
 	flag.StringVar(&flagAtomicsPath, "atomicspath", "", "path to local atomics folder")
 	flag.StringVar(&flagOutPath, "outfile", "", "path to directory you want data stored to")
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
-	flag.BoolVar(&gMissing, "missing", false, "also show missing criteria")
 }
 
 func FillInToolPathDefaults() {
@@ -57,216 +54,43 @@ func FillInToolPathDefaults() {
 	}
 }
 
-func RetreiveCommitIDs(atomicsPath string) []string {
-
-	//pull any changes from remote
-	pull := exec.Command("git", "pull")
-
-	//first get a log of all commits:
-	log := exec.Command("git", "log", "--since=\"2022-01-01\"", "--pretty=oneline", "--decorate=short")
-
-	//for testing, keep it short please :)
-
-	// log := exec.Command("git", "log", "--since=\"2022-05-01\"", "--pretty=oneline", "--decorate=short")
-
-	//TODO: replace with Atomics Path (probably by flag)
-	log.Dir = filepath.FromSlash(atomicsPath)
-	pull.Dir = filepath.FromSlash(atomicsPath)
-
-	err := pull.Run()
-
-	if err != nil {
-		panic(err)
-	}
-
-	if gVerbose {
-		fmt.Println("git pull success")
-	}
-
-	output, err := log.Output()
-
-	if err != nil {
-		panic(err)
-	}
-
-	//fmt.Println(string(output))
-
-	//output looks good, now parse for all commit ids
-
-	var commitIDs []string
-
-	lines := strings.Split(string(output), "\n")
-
-	for _, line := range lines {
-		comID := strings.Split(line, " ")
-
-		if gVerbose {
-			fmt.Println(comID[0])
-		}
-		commitIDs = append(commitIDs, comID[0])
-	}
-
-	return commitIDs
-}
-
-func FindTestCommitDates(path string) map[string]string {
-
-	commitIDs := RetreiveCommitIDs(path)
-
-	// keep the user up to date...
-	fmt.Println("Just found", len(commitIDs), "commits on the atomics repo (since 2022-01-01)... you're in for a treat!")
-	wait := fmt.Sprintf("%s %d %s", "If I had to guess, this will probably take...", (len(commitIDs)/1000)+1, "minutes?")
-	fmt.Println(wait)
-	fmt.Println("Also, FYI, you might get some file errors later on... I swear its not my fault! (okay, it might be)")
-
-	if len(commitIDs) <= 0 {
-		panic("Seems like the path to your atomic-validation-criteria directory is not the default. Try the -criterapath flag!")
-	}
-
-	findTest := regexp.MustCompile(`atomics\/(T\d{4}(?:\.\d{3})?)`)
-	findDate := regexp.MustCompile(`"\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}\s+[+-]\d{4}"`)
-
-	uptoDateMap := make(map[string]string)
-
-	for _, comID := range commitIDs {
-
-		var date string
-
-		if gVerbose {
-			fmt.Println("Getting Date information for commit", comID)
-		}
-
-		comInfo := exec.Command("git", "show", "--name-only", "--format=\"%ad\"", comID)
-
-		comInfo.Dir = filepath.FromSlash(path)
-
-		output, err := comInfo.Output()
-
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
-
-		strOutput := string(output)
-
-		// fmt.Println(strOutput)
-
-		//first, find the date of the commit:
-		match := findDate.FindString(strOutput)
-
-		if match != "" {
-			date = match[1 : len(match)-1]
-			if gVerbose {
-				fmt.Println("Date:", date)
-			}
-		} else {
-			if gVerbose {
-				fmt.Println("No date found in the string.")
-			}
-		}
-
-		matches := findTest.FindAllStringSubmatch(strOutput, -1)
-
-		for _, match := range matches {
-
-			if len(match) > 1 {
-				test := match[1]
-				if gVerbose {
-					fmt.Println("Test:", test)
-				}
-
-				//because tests are processed by chronological order, the first time a test is referenced should be its most up to date change
-				if len(uptoDateMap[test]) <= 0 {
-					uptoDateMap[test] = date
-				}
-			}
-		}
-	}
-
-	return uptoDateMap
-}
-
 // unfortunately, the criteria files are special in which they contain ranges of values. This will be treated accordingly.
 func FindCriteriaCommitDates(criteriaPath string) map[string]string {
 
-	//fill in default path
-	if len(criteriaPath) == 0 {
-		criteriaPath = "../atomic-validation-criteria"
-	}
+	dirPath := filepath.FromSlash(criteriaPath)
 
-	commitIDs := RetreiveCommitIDs(criteriaPath)
-
-	if len(commitIDs) <= 0 {
-		panic("Seems like the path to your atomic-validation-criteria directory is not the default. Try the -criterapath flag!")
-	}
-
-	findPath := regexp.MustCompile(`\S+\.csv`)
-	findDate := regexp.MustCompile(`"\w{3}\s+\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}\s+\d{4}\s+[+-]\d{4}"`)
+	winDir := dirPath + "/windows"
+	linuxDir := dirPath + "/linux"
+	macosDir := dirPath + "/macos"
 
 	criteriaDateMap := make(map[string]string)
 
-	// from the commit IDs, we will get the date, and the path to the file
-	for _, comID := range commitIDs {
+	pull := exec.Command("git", "pull")
 
-		var date string
-		if gVerbose {
-			fmt.Println("Getting Date information for commit", comID)
-		}
-		comInfo := exec.Command("git", "show", "--name-only", "--format=\"%ad\"", comID)
+	pull.Dir = dirPath
 
-		comInfo.Dir = filepath.FromSlash(criteriaPath)
+	pullErr := pull.Run()
 
-		output, err := comInfo.Output()
-		if err != nil {
-			fmt.Println(err)
-			continue
-		}
+	if pullErr != nil {
+		panic(pullErr)
+	}
+	if gVerbose {
+		fmt.Println("Pull on Criteria Repo Successful")
+	}
 
-		strOutput := string(output)
+	readWindowsErr := ListCriteria(winDir, criteriaDateMap)
+	if readWindowsErr != nil {
+		fmt.Println("Could not read Windows Directory")
+	}
 
-		//first, find the date of the commit:
-		match := findDate.FindString(strOutput)
+	readMacosErr := ListCriteria(macosDir, criteriaDateMap)
+	if readMacosErr != nil {
+		fmt.Println("Could not read Macos Directory")
+	}
 
-		if match != "" {
-			date = match[1 : len(match)-1]
-			if gVerbose {
-				fmt.Println("Date:", date)
-			}
-		} else {
-			if gVerbose {
-				fmt.Println("No date found in the string.")
-			}
-		}
-
-		// find the path to the file to be read
-
-		matches := findPath.FindAllString(strOutput, -1)
-
-		for _, path := range matches {
-
-			critPath := criteriaPath + "/" + path
-
-			if gVerbose {
-				fmt.Println("criteria path:", critPath)
-			}
-
-			criteria, err := ListCriteriaInFile(filepath.FromSlash(critPath))
-
-			if err != nil {
-				fmt.Println(err)
-				continue
-			}
-
-			for _, crit := range criteria {
-				if gVerbose {
-					fmt.Println("Criteria found:", crit)
-				}
-				criteriaDateMap[crit] = date
-			}
-
-		}
-
-		// for each commit, find the date it occured and which files it affected. From those files, parse which are tests, and record the *most recent* time it was updated
+	readLinuxErr := ListCriteria(linuxDir, criteriaDateMap)
+	if readLinuxErr != nil {
+		fmt.Println("Could not read Linux Directory")
 	}
 
 	return criteriaDateMap
@@ -278,83 +102,73 @@ type FlaggedCriteria struct {
 	TestUpdatedDate string
 }
 
-type NotFoundCriteria struct {
-	Name        string
-	UpdatedDate string
-}
-
 func prettifyCriteria(intef interface{}, outfile *os.File) {
 	output, _ := json.MarshalIndent(intef, "", "\t")
 
 	fmt.Fprintf(outfile, "%s \n", output)
 }
 
-func CompareCommitDates() ([]FlaggedCriteria, []NotFoundCriteria) {
+func CompareCommitDates() []FlaggedCriteria {
 
 	var crit []FlaggedCriteria
 
-	var notFound []NotFoundCriteria
-
-	redCanaryDates := FindTestCommitDates(flagAtomicsPath)
-
 	criteriaDates := FindCriteriaCommitDates(flagCriteriaPath)
 
-	// all dates are parsed: now time to find which tests are out of date (i.e. if redCanaryDate > criteriaDate)
+	for test, date := range criteriaDates {
 
-	for test, date := range redCanaryDates {
-
-		criteriaDate := criteriaDates[test]
 		if gVerbose {
-			fmt.Println("Canary Test: ", test)
-			fmt.Println("Canary Test Date: ", date)
-			fmt.Println("Corresponding Test Date: ", criteriaDate)
+			fmt.Println("Edits to test since criteria were made: ", test)
 		}
 
-		if len(criteriaDate) == 0 {
-			if gVerbose {
-				fmt.Println("No criteria found for", test)
-			}
-			notFound = append(notFound, NotFoundCriteria{Name: test, UpdatedDate: date})
+		log := exec.Command("git", "log", "--since="+date, flagAtomicsPath+"/"+test)
+
+		log.Dir = filepath.FromSlash(flagAtomicsPath)
+
+		output, logErr := log.Output()
+
+		if logErr != nil {
+			fmt.Println("ERROR: unable to parse the file "+flagAtomicsPath+"/"+test, logErr, ": the test may not exist")
 			continue
 		}
 
-		outofDate, date := compareDates(criteriaDate, date)
+		strOutput := string(output)
 
-		if outofDate {
+		if len(strOutput) > 0 {
 			if gVerbose {
-				fmt.Println("found test out of date: \n", test, "Criteria Last Updated:", criteriaDate, "Test last updated: ", date)
+				fmt.Println("Possibly out of date criteria for test:", test)
 			}
-			crit = append(crit, FlaggedCriteria{Name: test, CriteriaDate: criteriaDate, TestUpdatedDate: date})
+			// parse the criteria for the date it was updated
+			lines := strings.Split(strOutput, "\n")
+
+			testDate := strings.Trim(lines[2], "Date: ")
+
+			crit = append(crit, FlaggedCriteria{Name: test, CriteriaDate: translateDate(date), TestUpdatedDate: testDate})
+		} else {
+			if gVerbose {
+				fmt.Println("Criteria up to date for test", test)
+			}
 		}
 
 	}
-	return crit, notFound
+
+	// all dates are parsed: now time to find which tests are out of date (i.e. if redCanaryDate > criteriaDate)
+	return crit
 
 }
 
-// this function will return the most recent date from the comparison in both dates
-func compareDates(date1Str string, date2Str string) (bool, string) {
-	layout := "Mon Jan 2 15:04:05 2006 -0700"
+func translateDate(dateStr string) string {
+	inputLayout := "2006-01-02 15:04:05 -0700"
+	outputLayout := "Mon Jan 02 15:04:05 2006 -0700"
 
-	date1, _ := time.Parse(layout, date1Str)
-	date2, _ := time.Parse(layout, date2Str)
-
-	if len(date1Str) <= 0 {
-		return false, date2Str
-	}
-	if len(date2Str) <= 0 {
-		return false, date1Str
+	t, err := time.Parse(inputLayout, dateStr)
+	if err != nil {
+		fmt.Println("Error while parsing date:", err)
+		return ""
 	}
 
-	if date1.Before(date2) {
-		return true, date2Str
+	output := t.Format(outputLayout)
 
-	} else if date1.After(date2) {
-		return false, date1Str
-
-	} else {
-		return false, date2Str
-	}
+	return output
 }
 
 func ListCriteriaInFile(filename string) ([]string, error) {
@@ -408,6 +222,66 @@ func ListCriteriaInFile(filename string) ([]string, error) {
 	return retval, nil
 }
 
+func ListCriteria(dirPath string, dateMap map[string]string) error {
+
+	dirPath = filepath.FromSlash(dirPath)
+	allfiles, err := ioutil.ReadDir(dirPath)
+	if err != nil {
+		fmt.Println("ERROR: unable to list files in "+dirPath, err)
+		return err
+	}
+	for _, f := range allfiles {
+
+		var date string
+
+		if !strings.HasSuffix(f.Name(), ".csv") {
+			continue
+		}
+		if strings.Contains(f.Name(), "_withguids") {
+			continue
+		}
+
+		if gVerbose {
+			fmt.Println("Loading " + f.Name())
+		}
+		//find the date
+		log := exec.Command("git", "log", "-n", "1", "--date", "iso", "./"+f.Name())
+
+		log.Dir = filepath.FromSlash(dirPath)
+
+		output, logErr := log.Output()
+
+		if logErr != nil {
+			fmt.Println("ERROR: unable to list files in "+dirPath, err)
+			return err
+		}
+
+		strOutput := string(output)
+
+		// parse output for the date
+		lines := strings.Split(strOutput, "\n")
+
+		date = strings.Trim(lines[2], "Date: ")
+
+		//assign date to each technique
+		techniqueIds, err := ListCriteriaInFile(filepath.FromSlash(dirPath + "/" + f.Name()))
+
+		if err != nil {
+			fmt.Println("ERROR:", err)
+			return nil
+		} else {
+			for _, technique := range techniqueIds {
+				if gVerbose {
+					fmt.Println("Assigning technique", technique, "to date", date)
+				}
+				dateMap[technique] = date
+			}
+		}
+	}
+
+	return nil
+}
+
 func main() {
 	flag.Parse()
 
@@ -429,19 +303,11 @@ func main() {
 
 	fmt.Println("Hang on, this will take a while...")
 
-	caption := "Criteria Flagged: May be out of Date: \n"
-	flagged, notFound := CompareCommitDates()
+	caption := "Criteria Flagged -> May be out of Date: \n"
+	flagged := CompareCommitDates()
 	outfile.WriteString(caption)
 	for _, criteria := range flagged {
 		prettifyCriteria(criteria, outfile)
-	}
-
-	if gMissing {
-		caption = "\nCritera Not Found: \n"
-		outfile.WriteString(caption)
-		for _, criteria := range notFound {
-			prettifyCriteria(criteria, outfile)
-		}
 	}
 
 	if len(flagOutPath) > 0 {

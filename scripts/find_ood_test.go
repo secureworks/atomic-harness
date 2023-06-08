@@ -22,35 +22,27 @@ import (
 
 // with the default timeout settings, this test is unable to run to completion. If you would like to test it, either change the default timeout to about 3 minutes,
 // or change the git log command to be since an earlier date
-func TestFindOutOfDate(t *testing.T) {
-	// this can be changed to your atomics path
-	atomicsPath := "../../atomic-red-team/atomics"
 
-	assert.Equal(t, "Thu Apr 27 14:23:24 2023 +0000", FindTestCommitDates(atomicsPath)["T1204.003"])
+func TestCommitDate(t *testing.T) {
+	// this can be changed to your criteria path
+	criteriaPath := "../../atomic-validation-criteria"
 
-	assert.Equal(t, "Thu Apr 27 18:09:51 2023 +0200", FindTestCommitDates(atomicsPath)["T1112"])
+	//criteria does not exist for this test
+	assert.Equal(t, "", FindCriteriaCommitDates(criteriaPath)["T1204.003"])
 
-	assert.Equal(t, "Fri May 19 17:06:33 2023 +0000", FindTestCommitDates(atomicsPath)["T1003.001"])
+	//make sure date is parsed correctly
+	assert.Equal(t, "2023-05-21 11:44:44 -0700", FindCriteriaCommitDates(criteriaPath)["T1048.002"])
 
-	assert.Equal(t, "Thu Apr 27 18:09:51 2023 +0200", FindTestCommitDates(atomicsPath)["T1070.008"])
+	//make sure it will fail (I hope so...)
+	assert.NotEqual(t, "2023-05-21 11:44:44 -0700", FindCriteriaCommitDates(criteriaPath)["T1003.001"])
 
-	//try a very old commit and see if the log goes back far enough
-	assert.Equal(t, "Thu Apr 27 14:23:24 2022 +0000", FindTestCommitDates(atomicsPath)["T1547.003"])
 }
 
-func TestCompareDates(t *testing.T) {
-	outofDate, _ := compareDates("Thu Apr 27 18:09:51 2023 +0200", "Fri May 19 17:06:33 2023 +0000")
-	assert.Equal(t, true, outofDate)
+func TestTranslateDates(t *testing.T) {
 
-	outofDate, _ = compareDates("Thu Apr 27 18:09:51 2023 +0200", "Thu Apr 27 14:23:24 2022 +0000")
-	assert.Equal(t, false, outofDate)
+	assert.Equal(t, "Sun May 21 11:44:44 2023 -0700", translateDate("2023-05-21 11:44:44 -0700"))
 
-	outofDate, _ = compareDates("Fri May 19 17:06:33 2023 +0000", "")
-	assert.Equal(t, false, outofDate)
+	assert.Equal(t, "Mon May 22 11:44:44 2023 -0700", translateDate("2023-05-22 11:44:44 -0700"))
 
-	outofDate, _ = compareDates("Thu Apr 27 18:09:51 2023 +0200", "")
-	assert.Equal(t, false, outofDate)
-
-	outofDate, _ = compareDates("", "")
-	assert.Equal(t, false, outofDate)
+	assert.Equal(t, "Tue Jun 20 01:02:44 2023 -0700", translateDate("2023-06-20 1:02:44 -0700"))
 }
