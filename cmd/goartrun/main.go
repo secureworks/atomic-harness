@@ -161,7 +161,7 @@ func main() {
 
 	if len(plan) > 0 {
 		if runSpec.ResultsDir == "" {
-			fmt.Println(plan)
+			fmt.Println(string(plan))
 		} else {
 			resultsFilePath := runSpec.ResultsDir + "/run_summary." + ext
 			err = ioutil.WriteFile(resultsFilePath, plan, 0644)
