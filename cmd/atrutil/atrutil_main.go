@@ -547,7 +547,7 @@ func GenerateCriteria(tid string) error {
 
 				if !gUnsafe {
 					if unsafeRegex.MatchString(com) {
-						s += "!!!, Potentially destructive command found: " + com
+						s += fmt.Sprintln("!!!, Potentially destructive command found:", com)
 					}
 				}
 
