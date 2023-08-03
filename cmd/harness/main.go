@@ -530,9 +530,10 @@ func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 
 		suffix := tool.Suffix
 		if len(suffix) == 0 {
-			suffix = "''"
+			suffix = "\"\""
 		}
-		cmd := exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--suffix", suffix, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
+		// cmd := exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--suffix", suffix, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
+		cmd := exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 
 		fmt.Println("launching ", cmd.String())
 		output, err := cmd.CombinedOutput()
@@ -696,16 +697,16 @@ func SubstituteSysInfoArgs(spec *types.AtomicTestCriteria) bool {
 }
 
 /*
-	Technique  string
-	TestName   string
-	TestGuid   string
-	TestIndex  int
+Technique  string
+TestName   string
+TestGuid   string
+TestIndex  int
 
-	AtomicsDir string
-	TempDir    string
-	ResultsDir string
+AtomicsDir string
+TempDir    string
+ResultsDir string
 
-	Inputs     map[string]string
+Inputs     map[string]string
 */
 func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
 	obj := types.RunSpec{}
