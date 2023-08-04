@@ -529,11 +529,13 @@ func FetchTelemetry(resultsDir string, startTime, endTime int64) {
 	for _, tool := range gTelemTools {
 
 		suffix := tool.Suffix
-		if len(suffix) == 0 {
-			suffix = "\"\""
+
+		var cmd *exec.Cmd
+		if len(suffix) != 0 {
+			cmd = exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--suffix", suffix, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
+		} else {
+			cmd = exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 		}
-		// cmd := exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--suffix", suffix, "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
-		cmd := exec.Command(tool.Path, "--fetch", "--resultsdir", filepath.FromSlash(resultsDir), "--ts", fmt.Sprintf("%d,%d", startTime, endTime))
 
 		fmt.Println("launching ", cmd.String())
 		output, err := cmd.CombinedOutput()
