@@ -126,10 +126,14 @@ func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 			return retval
 		}
 		if 0 == testRun.TimeWorkDirCreate || 0 != testRun.TimeWorkDirDelete {
-			if gVerbose {
-				fmt.Println("Ignoring event before/after goartrun working dir event", nativeJsonStr)
+			if 0 != testRun.TimeWorkDirDelete && evt.Timestamp <= testRun.TimeWorkDirDelete {
+				// we want this
+			} else {
+				if gVerbose {
+					fmt.Println("Ignoring event before/after goartrun working dir event", nativeJsonStr)
+				}
+				return retval
 			}
-			return retval
 		}
 	}
 
