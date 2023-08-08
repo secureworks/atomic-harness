@@ -353,12 +353,18 @@ func AddTestsForTechniqueUsingCriteria(tid string) int {
  */
 func AddTestsForTechniqueUsingAtomicsIndex(targetTid string) int {
 	num := 0
+	a := strings.SplitN(targetTid,"#",2)
+	targetTechniq := a[0]
+	idOrHash := ""
+	if len(a) > 1 {
+		idOrHash = a[1]
+	}
 	for tid, specs := range gAtomicTests {
-		if !strings.HasPrefix(tid, targetTid) {
+		if !strings.HasPrefix(tid, targetTechniq) {
 			continue
 		}
 
-		if targetTid != tid && gVerbose {
+		if targetTechniq != tid && gVerbose {
 			fmt.Println("Using", tid, "for", targetTid)
 		}
 
@@ -370,9 +376,12 @@ func AddTestsForTechniqueUsingAtomicsIndex(targetTid string) int {
 				num += 1
 				continue
 			}
-
-			gTestSpecs = append(gTestSpecs, spec)
-			num += 1
+			//fmt.Println(targetTid, spec)
+			if 0 == len(idOrHash) || spec.TestIndex == idOrHash ||
+				(len(idOrHash)>= 8 && strings.HasPrefix(spec.TestGuid,idOrHash) ) {
+				gTestSpecs = append(gTestSpecs, spec)
+				num += 1
+			}
 		}
 	}
 	return num
@@ -406,7 +415,7 @@ func FindCriteriaForTestSpecs() bool {
 			//fmt.Println("Compare:", rec.Id(), spec)
 
 			if len(spec.TestGuid) > 0 && len(rec.TestGuid) > 0 {
-				if strings.HasPrefix(rec.TestGuid, spec.TestGuid) {
+				if strings.HasPrefix(spec.TestGuid, rec.TestGuid) {
 					AddOnce(spec, rec)
 				}
 			} else {
@@ -1385,6 +1394,8 @@ func main() {
 		if err != nil {
 			fmt.Println("unable to read runlist file", err)
 			os.Exit(1)
+		} else if len(gTestSpecs) == 0 {
+			fmt.Println("no test specs in file?", flagTechniquesFilePath)
 		}
 	} else if flagRetryFailed != "" {
 		err := utils.LoadFailedTechniquesList(flagRetryFailed, &gTestSpecs)
