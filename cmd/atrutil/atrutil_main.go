@@ -7,11 +7,13 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"io/ioutil" // TODO: shouldn't need this anymore
 
 	//"log"
 
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 
@@ -34,8 +36,10 @@ var flagGenCriteriaOutPath string
 var gVerbose = false
 var gUnsafe = false
 var gPatchCriteriaRefsMode = false
+var gPackageMode = false
 var gFindTestVal string
 var gFindTestCoverage = false
+var flagTidCsvPath string
 
 // sh /tmp/artwork-T1560.002_3-458617291/goart-T1560.002-test.bash
 var gRxUnixRedirect = regexp.MustCompile(`\d?>>?[ ]?([#{}._/\-0-9A-Za-z ]+)`)
@@ -45,12 +49,14 @@ func init() {
 	flag.StringVar(&flagAtomicsPath, "atomicspath", "", "path to local atomics folder")
 	flag.BoolVar(&gVerbose, "verbose", false, "print more details")
 	flag.BoolVar(&gPatchCriteriaRefsMode, "patch_criteria_refs", false, "will update criteria file test numbers with GUIDs")
+	flag.BoolVar(&gPackageMode, "package", false, "build and package harness, criteria, select atomics")
 	flag.BoolVar(&gUnsafe, "unsafe", false, "allow potentially destructive tests that may delete important file systems. Defaults to false.")
 	flag.StringVar(&gFindTestVal, "findtests", "", "Search atomic-red-team Indexes-CSV for string")
 	flag.BoolVar(&gFindTestCoverage, "coverage", false, "Search atomic-red-team Indexes-CSV and find percentage of coverage using path to folder containing CSV files")
 	flag.StringVar(&flagPlatform, "platform", "", "optional platform specifier (linux,macos,windows)")
 	flag.StringVar(&flagGenCriteria, "gencriteria", "", "supply name of test (Ex: T1070.004) and the CSV for the criteria will be outputted")
 	flag.StringVar(&flagGenCriteriaOutPath, "outfile", "", "supply name of directory to store generated criteria in csv form (requires gencriteria flag)")
+	flag.StringVar(&flagTidCsvPath, "tidcsvpath", "", "for package mode, a CSV file with testIDs to run in first column")
 }
 
 func ToInt64(valstr string) int64 {
@@ -226,7 +232,7 @@ func FillInToolPathDefaults() {
 		cwd = "."
 	}
 	if flagCriteriaPath == "" {
-		flagCriteriaPath = cwd + "/../atomic-validation-criteria/" + flagPlatform
+		flagCriteriaPath = filepath.Join(cwd, "..","atomic-validation-criteria",flagPlatform)
 	}
 	if flagAtomicsPath == "" {
 		flagAtomicsPath = cwd + "/../atomic-red-team/atomics"
@@ -613,6 +619,221 @@ func GenerateAllCriteria() error {
 
 }
 
+/*
+ * A test list has specific testID and num/hash in first column
+ */
+func LoadTestList(filename string) ([]string, error) {
+	tids := []string{}
+	filename = filepath.FromSlash(filename)
+	data, err := ioutil.ReadFile(filename)
+	if err != nil {
+		return tids, err
+	}
+
+	r := csv.NewReader(bytes.NewReader(data))
+	r.LazyQuotes = true
+	r.FieldsPerRecord = -1 // no validation on num columns per row
+
+	records, err := r.ReadAll()
+	if err != nil {
+		return tids, err
+	}
+
+	for _, row := range records {
+		//fmt.Println(row)
+
+		tid := row[0]
+		if len(tid) == 0 || tid[0] != 'T' {
+			continue
+		}
+		tids = append(tids, tid)
+	}
+
+	return tids,nil
+}
+
+/*
+ * strips off the test num or hash for tids and
+ * returns a de-duplicated list of technique IDs
+ * Example: ["T1014#1" "T1014#2" T1562#babecafe] -> [ "T1014" "T1562" ]
+ */
+func GetTechniquesFromTids(tids []string) []string {
+	m := map[string]string{}
+	for _,entry := range tids {
+		a := strings.SplitN(entry,"#",2)
+		techniq := a[0]
+		m[techniq] = techniq
+	}
+
+	retval := []string{}
+	for k,_ := range m {
+		retval = append(retval, k)
+	}
+	return retval
+}
+
+const PkgRootTempDir string = ".pkgroot"
+
+// CopyDir copies the content of src to dst. src should be a full path.
+// https://stackoverflow.com/questions/51779243/copy-a-folder-in-go
+// answer posted by Gregory Vincic
+func CopyDir(src, dst string) error {
+
+    return filepath.Walk(src, func(path string, info fs.FileInfo, err error) error {
+        if err != nil {
+            return err
+        }
+
+        // copy to this path
+        outpath := filepath.Join(dst, strings.TrimPrefix(path, src))
+
+        //fmt.Println("src", src, "dest",outpath)
+
+        if info.IsDir() {
+            os.MkdirAll(outpath, info.Mode())
+            return nil // means recursive
+        }
+
+        // handle irregular files
+        if !info.Mode().IsRegular() {
+            switch info.Mode().Type() & os.ModeType {
+            case os.ModeSymlink:
+                link, err := os.Readlink(path)
+                if err != nil {
+                    return err
+                }
+                return os.Symlink(link, outpath)
+            }
+            return nil
+        }
+
+        // copy contents of regular file efficiently
+
+        // open input
+        in, _ := os.Open(path)
+        if err != nil {
+            return err
+        }
+        defer in.Close()
+
+        // create output
+        fh, err := os.Create(outpath)
+        if err != nil {
+            return err
+        }
+        defer fh.Close()
+
+        // make it the same
+        fh.Chmod(info.Mode())
+
+        // copy content
+        _, err = io.Copy(fh, in)
+        return err
+    })
+}
+
+/*
+ * PackageHarnessWithTests
+ * - build atomic-harness
+ *
+ * - create archive (tgz) with harness,criteria,subset of atomics desired
+ *
+pkgdir/atomic-harness/bin/*
+pkgdir/atomic-red-team/atomics/T*
+pkgdir/atomic-validation-criteria/<platform>/*
+ */
+func PackageHarnessWithTests(tidCsvPath string) {
+	if len(tidCsvPath) == 0 {
+		fmt.Println("ERROR: path to test CSV is empty")
+		os.Exit(2)
+	}
+
+	tids,err := LoadTestList(tidCsvPath)
+	if err != nil {
+		fmt.Println("ERROR reading",tidCsvPath,err)
+		os.Exit(2)
+	}
+
+	techniques := GetTechniquesFromTids(tids)
+
+	if len(techniques) == 0 {
+		fmt.Println("ERROR: list of techniques is empty", tidCsvPath)
+		os.Exit(2)
+	}
+	fmt.Println(techniques)
+
+	// clear and create pkgdir
+	os.RemoveAll(PkgRootTempDir)
+	err = os.Mkdir(PkgRootTempDir,0755)
+	if err != nil {
+		fmt.Println("ERROR: unable to create package working dir",PkgRootTempDir, err)
+		os.Exit(2)
+	}
+	// make subdirs
+	tmpHarnessBinPath := filepath.Join(PkgRootTempDir,"atomic-harness","bin")
+	tmpAtomicsPath := filepath.Join(PkgRootTempDir,"atomic-red-team","atomics")
+	err = os.MkdirAll(tmpHarnessBinPath, 0755)
+	if err != nil {
+		fmt.Println("ERROR: mkdir", err)
+		os.Exit(2)
+	}
+	err = os.MkdirAll(tmpAtomicsPath, 0755)
+	if err != nil {
+		fmt.Println("ERROR: mkdir", err)
+		os.Exit(2)
+	}
+
+	// copy harness bin
+
+	srcHarnessBinPath,_ := filepath.Abs("bin")
+	err = CopyDir(srcHarnessBinPath, filepath.Join(PkgRootTempDir,"atomic-harness","bin"))
+	if err != nil {
+		fmt.Println("ERROR: CopyDir", err)
+		os.Exit(2)
+	}
+
+	// copy criteria
+
+	err = CopyDir(flagCriteriaPath, filepath.Join(PkgRootTempDir,"atomic-validation-criteria",flagPlatform))
+	if err != nil {
+		fmt.Println("ERROR: CopyDir", err)
+		os.Exit(2)
+	}
+
+	// copy atomics
+
+	for _,techniq := range techniques {
+		err = CopyDir(filepath.Join(flagAtomicsPath,techniq), filepath.Join(tmpAtomicsPath,techniq))
+		if err != nil {
+			fmt.Println("ERROR: CopyDir", err)
+		}
+	}
+
+	// make archive
+	archiveName := "packaged-harness-" + flagPlatform + ".tgz"
+	cmd := exec.Command("tar","cfz",archiveName,"-C",PkgRootTempDir,".")
+	err = cmd.Run()
+	if err != nil {
+		fmt.Println("ERROR: tar", err)
+		os.Exit(2)
+	}
+
+	size,err := fileSize(archiveName)
+	if err != nil {
+		fmt.Println("Error getting size of output file",archiveName,err)
+		os.Exit(2)
+	}
+	fmt.Println("Output in ", archiveName, size,"bytes")
+}
+
+func fileSize(path string) (int64,error) {
+	fi, err := os.Stat(path)
+	if err != nil {
+	    return 0,err
+	}
+	return fi.Size(),nil
+}
+
 // fmt.Println("Found", numMatched, "in", total, "tests for platform", flagPlatform)
 
 func main() {
@@ -626,6 +847,11 @@ func main() {
 
 	if gPatchCriteriaRefsMode {
 		PatchCriteriaGuids()
+		return
+	}
+
+	if gPackageMode {
+		PackageHarnessWithTests(flagTidCsvPath)
 		return
 	}
 

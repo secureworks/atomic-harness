@@ -7,3 +7,5 @@ bin/
 data/generated
 CHANGELOG
 .gitlab*
+.pkgroot
+packaged-harness*

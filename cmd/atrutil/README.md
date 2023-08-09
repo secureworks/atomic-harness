@@ -22,3 +22,13 @@ Originally, the criteria files only had TestNumber and TestName for each test.  
 ```
 ./bin/atrutil --patch_criteria_refs
 ```
+
+## Package mode
+
+This will copy selected technique folders from atomic-red-team, the atomic-validation-criteria, and the harness binaries into an archive.  This can be used by CI pipelines without having to re-clone the large atomic-red-team repo, when just a small number of techniques are desired.
+
+```
+$ ./bin/atrutil -package --tidcsvpath ../linux_core_atomics.csv
+[T1548.001 T1027.002 T1053.003 T1040 T1059.004 T1078.003 T1543.002 T1562 T1574.006 T1003.007 T1014]
+Output in  packaged-harness-linux.tgz 7136339 bytes
+```
