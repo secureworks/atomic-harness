@@ -21,6 +21,7 @@ const (
 	SimpleSchemaNetsniff    SimpleSchemaChar = "S"
 	SimpleSchemaPTrace      SimpleSchemaChar = "T"
 	SimpleSchemaDetection   SimpleSchemaChar = "W"
+	SimpleSchemaETW         SimpleSchemaChar = "E"
 )
 
 type SimpleProcessFields struct {
@@ -78,6 +79,14 @@ type SimpleNetflowFields struct {
 	ExePath   string `json:"exe_path,omitempty"`
 }
 
+type SimpleETWFields struct {
+	ChanName string `json:"chan_name,omitempty"`       // chan_name: "Microsoft-Windows-PowerShell/Operational "
+	EventMsg string `json:"event_msg,omitempty"`       // event_msg: "Creating Scriptblock text (%1 of %2): .... "
+	EvtData  string `json:"event_data_list,omitempty"` // event_data "ScriptBlockText:<malicous-script-call> Path:<path-to-file>.ps1 "}
+
+	Pid int64 `json:"pid,omitempty"`
+}
+
 type SimpleEvent struct {
 	EventType       SimpleSchemaChar `json:"evt_type"`
 	Timestamp       int64            `json:"ts,omitempty"`
@@ -88,4 +97,5 @@ type SimpleEvent struct {
 	ProcessExitFields *SimpleProcessExitFields `json:"evt_exit,omitempty"`
 	FileFields        *SimpleFileFields        `json:"evt_file,omitempty"`
 	NetflowFields     *SimpleNetflowFields     `json:"evt_netflow,omitempty"`
+	ETWFields         *SimpleETWFields         `json:"evt_etw,omitempty"`
 }
