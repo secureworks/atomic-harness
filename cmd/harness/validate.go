@@ -258,6 +258,43 @@ func CheckNetflowEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 	return retval
 }
 
+func CheckETWEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
+
+	for _, exp := range testRun.criteria.ExpectedEvents {
+		if exp.EventType != "ETW" {
+			continue
+		}
+		numMatchingChecks := 0
+		for _, fc := range exp.FieldChecks {
+			isMatch := false
+			switch fc.FieldName {
+			case "chan_name":
+				isMatch = CheckMatch(evt.ETWFields.ChanName, fc.Op, fc.Value)
+			case "event_msg":
+				isMatch = CheckMatch(evt.ETWFields.EventMsg, fc.Op, fc.Value)
+			case "event_data_list":
+				isMatch = CheckMatch(evt.ETWFields.EvtData, fc.Op, fc.Value)
+			default:
+				fmt.Println("ERROR: unknown FieldName", fc)
+			}
+			if isMatch {
+				if gDebug {
+					fmt.Printf("Field Match '%s' '%s'\n", fc.FieldName, fc.Value)
+				}
+				numMatchingChecks += 1
+			}
+		}
+		if numMatchingChecks == len(exp.FieldChecks) {
+			AddMatchingEvent(testRun, exp, evt)
+			retval = true
+		} else if numMatchingChecks > 0 {
+			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+		}
+	}
+	return retval
+}
+
 func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 	gValidateState = ExtractState{}
 	gValidateState.StartTime = uint64(testRun.StartTime)
@@ -315,6 +352,8 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 			isMatch = CheckFileEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaNetflow:
 			isMatch = CheckNetflowEvent(testRun, evt, rawEventStr)
+		case types.SimpleSchemaETW:
+			isMatch = CheckETWEvent(testRun, evt, rawEventStr)
 		default:
 			fmt.Println("missing handling of type", line)
 		}
@@ -427,6 +466,8 @@ func GetTelemChar(exp *types.ExpectedEvent) string {
 		return "M"
 	case "VOLUME":
 		return "V"
+	case "ETW":
+		return "E"
 	default:
 		break
 	}
