@@ -101,6 +101,7 @@ Done. Output in ./testruns/harness-results-2773792211
 
 - `A` : Auth Event
 - `C` : Correlation (e.g. processes piped together)
+- `E` : Event Tracing for Windows (ETW) Event
 - `f` : File Read Event
 - `F` : FileMod Event
 - `M` : Module Load/Unload
