@@ -104,6 +104,7 @@ Done. Output in ./testruns/harness-results-2773792211
 - `E` : Event Tracing for Windows (ETW) Event
 - `f` : File Read Event
 - `F` : FileMod Event
+- `I` : Anti Malware Scan Interface (AMSI) Event
 - `M` : Module Load/Unload
 - `N` : Netflow
 - `P` : Process Event
