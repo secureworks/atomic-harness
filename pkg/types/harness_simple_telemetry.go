@@ -22,6 +22,7 @@ const (
 	SimpleSchemaPTrace      SimpleSchemaChar = "T"
 	SimpleSchemaDetection   SimpleSchemaChar = "W"
 	SimpleSchemaETW         SimpleSchemaChar = "E"
+	SimpleSchemaAMSI        SimpleSchemaChar = "I"
 )
 
 type SimpleProcessFields struct {
@@ -87,6 +88,12 @@ type SimpleETWFields struct {
 	Pid int64 `json:"pid,omitempty"`
 }
 
+type SimpleAMSIFields struct {
+	ScanContent string `json:"scan_content,omitempty"`
+	Pid         int64  `json:"pid,omitempty"`
+	AppName     string `json:"app_name,omitempty"`
+}
+
 type SimpleEvent struct {
 	EventType       SimpleSchemaChar `json:"evt_type"`
 	Timestamp       int64            `json:"ts,omitempty"`
@@ -98,4 +105,5 @@ type SimpleEvent struct {
 	FileFields        *SimpleFileFields        `json:"evt_file,omitempty"`
 	NetflowFields     *SimpleNetflowFields     `json:"evt_netflow,omitempty"`
 	ETWFields         *SimpleETWFields         `json:"evt_etw,omitempty"`
+	AMSIFields        *SimpleAMSIFields        `json:"evt_amsi,omitempty"`
 }
