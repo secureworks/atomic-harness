@@ -295,6 +295,44 @@ func CheckETWEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr
 	return retval
 }
 
+func CheckAMSIEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
+
+	for _, exp := range testRun.criteria.ExpectedEvents {
+		if exp.EventType != "AMSI" {
+			continue
+		}
+
+		numMatchingChecks := 0
+		for _, fc := range exp.FieldChecks {
+			isMatch := false
+			switch fc.FieldName {
+			case "app_name":
+				isMatch = CheckMatch(evt.AMSIFields.AppName, fc.Op, fc.Value)
+			case "scan_content":
+				isMatch = CheckMatch(evt.AMSIFields.ScanContent, fc.Op, fc.Value)
+			default:
+				fmt.Println("ERROR: unknown FieldName", fc)
+			}
+			if isMatch {
+				if gDebug {
+					fmt.Printf("Field Match '%s' '%s'\n", fc.FieldName, fc.Value)
+				}
+				numMatchingChecks += 1
+			}
+		}
+		if numMatchingChecks == len(exp.FieldChecks) {
+			AddMatchingEvent(testRun, exp, evt)
+			retval = true
+		} else if numMatchingChecks > 0 {
+			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+		}
+	}
+
+	return retval
+
+}
+
 func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 	gValidateState = ExtractState{}
 	gValidateState.StartTime = uint64(testRun.StartTime)
@@ -354,6 +392,8 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 			isMatch = CheckNetflowEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaETW:
 			isMatch = CheckETWEvent(testRun, evt, rawEventStr)
+		case types.SimpleSchemaAMSI:
+			isMatch = CheckAMSIEvent(testRun, evt, rawEventStr)
 		default:
 			fmt.Println("missing handling of type", line)
 		}
