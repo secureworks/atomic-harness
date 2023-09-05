@@ -108,6 +108,7 @@ Done. Output in ./testruns/harness-results-2773792211
 - `M` : Module Load/Unload
 - `N` : Netflow
 - `P` : Process Event
+- `R` : Windows Registry Event
 - `S` : NetSniff Event
 - `T` : PTrace Event
 - `V` : Volume Activity Event
