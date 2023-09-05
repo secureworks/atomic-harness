@@ -23,6 +23,7 @@ const (
 	SimpleSchemaDetection   SimpleSchemaChar = "W"
 	SimpleSchemaETW         SimpleSchemaChar = "E"
 	SimpleSchemaAMSI        SimpleSchemaChar = "I"
+	SimpleSchemaReg         SimpleSchemaChar = "R"
 )
 
 type SimpleProcessFields struct {
@@ -94,6 +95,14 @@ type SimpleAMSIFields struct {
 	AppName     string `json:"app_name,omitempty"`
 }
 
+type SimpleRegFields struct {
+	EventType string `json:"event_type,omitempty"` // event_type: "SETVALUEKEY", "DELETEKEY", ...
+	Pid       int64  `json:"pid,omitempty"`
+	KeyName   string `json:"key_name,omitempty"`
+	ValueName string `json:"value_name,omitempty"` // if present, for SETVALUEKEY
+	ValueData string `json:"value_data,omitempty"` // if present, for SETVALUEKEY
+}
+
 type SimpleEvent struct {
 	EventType       SimpleSchemaChar `json:"evt_type"`
 	Timestamp       int64            `json:"ts,omitempty"`
@@ -106,4 +115,5 @@ type SimpleEvent struct {
 	NetflowFields     *SimpleNetflowFields     `json:"evt_netflow,omitempty"`
 	ETWFields         *SimpleETWFields         `json:"evt_etw,omitempty"`
 	AMSIFields        *SimpleAMSIFields        `json:"evt_amsi,omitempty"`
+	RegFields         *SimpleRegFields         `json:"evt_reg,omitempty"`
 }
