@@ -347,6 +347,8 @@ func CheckRegEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr
 			switch fc.FieldName {
 			case "event_type":
 				isMatch = CheckMatch(evt.RegFields.EventType, fc.Op, fc.Value)
+			case "key_name":
+				isMatch = CheckMatch(evt.RegFields.KeyName, fc.Op, fc.Value)
 			case "value_name":
 				isMatch = CheckMatch(evt.RegFields.ValueName, fc.Op, fc.Value)
 			case "value_data":
