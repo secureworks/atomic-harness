@@ -98,6 +98,7 @@ type SimpleAMSIFields struct {
 type SimpleRegFields struct {
 	EventType string `json:"event_type,omitempty"` // event_type: "SETVALUEKEY", "DELETEKEY", ...
 	Pid       int64  `json:"pid,omitempty"`
+	KeyName   string `json:"key_name,omitempty"`
 	ValueName string `json:"value_name,omitempty"` // if present, for SETVALUEKEY
 	ValueData string `json:"value_data,omitempty"` // if present, for SETVALUEKEY
 }
