@@ -333,6 +333,48 @@ func CheckAMSIEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 
 }
 
+func CheckRegEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
+
+	for _, exp := range testRun.criteria.ExpectedEvents {
+		if exp.EventType != "REG" {
+			continue
+		}
+
+		numMatchingChecks := 0
+		for _, fc := range exp.FieldChecks {
+			isMatch := false
+			switch fc.FieldName {
+			case "event_type":
+				isMatch = CheckMatch(evt.RegFields.EventType, fc.Op, fc.Value)
+			case "key_name":
+				isMatch = CheckMatch(evt.RegFields.KeyName, fc.Op, fc.Value)
+			case "value_name":
+				isMatch = CheckMatch(evt.RegFields.ValueName, fc.Op, fc.Value)
+			case "value_data":
+				isMatch = CheckMatch(evt.RegFields.ValueData, fc.Op, fc.Value)
+			default:
+				fmt.Println("ERROR: unknown FieldName", fc)
+			}
+			if isMatch {
+				if gDebug {
+					fmt.Printf("Field Match '%s' '%s'\n", fc.FieldName, fc.Value)
+				}
+				numMatchingChecks += 1
+			}
+		}
+		if numMatchingChecks == len(exp.FieldChecks) {
+			AddMatchingEvent(testRun, exp, evt)
+			retval = true
+		} else if numMatchingChecks > 0 {
+			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+		}
+	}
+
+	return retval
+
+}
+
 func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 	gValidateState = ExtractState{}
 	gValidateState.StartTime = uint64(testRun.StartTime)
@@ -394,6 +436,8 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 			isMatch = CheckETWEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaAMSI:
 			isMatch = CheckAMSIEvent(testRun, evt, rawEventStr)
+		case types.SimpleSchemaReg:
+			isMatch = CheckRegEvent(testRun, evt, rawEventStr)
 		default:
 			fmt.Println("missing handling of type", line)
 		}
@@ -508,6 +552,10 @@ func GetTelemChar(exp *types.ExpectedEvent) string {
 		return "V"
 	case "ETW":
 		return "E"
+	case "AMSI":
+		return "I"
+	case "REG":
+		return "R"
 	default:
 		break
 	}
