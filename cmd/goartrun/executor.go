@@ -79,8 +79,12 @@ func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest,
 
 		case "prereq":
 			if len(test.Dependencies) != 0 {
-				if IsUnsupportedExecutor(test.Executor.Name) {
-					return nil, fmt.Errorf("dependency executor %s is not supported", test.DependencyExecutorName), types.StatusInvalidArguments
+				executorName := test.DependencyExecutorName
+				if len(executorName) == 0 {
+					executorName = test.Executor.Name
+				}
+				if IsUnsupportedExecutor(executorName) {
+					return nil, fmt.Errorf("dependency executor %s (%s) is not supported", test.DependencyExecutorName, test.Executor.Name), types.StatusInvalidArguments
 				}
 
 				fmt.Printf("\nChecking dependencies...\n")
@@ -88,7 +92,7 @@ func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest,
 				for i, dep := range test.Dependencies {
 					fmt.Printf("  - %s", dep.Description)
 
-					_, err := executeStage(fmt.Sprintf("checkPrereq%d",i), dep.PrereqCommand, test.DependencyExecutorName, test.BaseDir, args , env , tid, test.Name, runSpec)
+					_, err := executeStage(fmt.Sprintf("checkPrereq%d",i), dep.PrereqCommand, executorName, test.BaseDir, args , env , tid, test.Name, runSpec)
 
 
 					if err == nil {
@@ -96,7 +100,7 @@ func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest,
 						continue
 					}
 
-					result, err := executeStage(fmt.Sprintf("getPrereq%d",i), dep.GetPrereqCommand, test.DependencyExecutorName, test.BaseDir, args , env , tid, test.Name, runSpec)
+					result, err := executeStage(fmt.Sprintf("getPrereq%d",i), dep.GetPrereqCommand, executorName, test.BaseDir, args , env , tid, test.Name, runSpec)
 
 					if err != nil {
 						if result == "" {
