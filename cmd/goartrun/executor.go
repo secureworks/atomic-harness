@@ -307,8 +307,13 @@ func executeStage(stage, cmds, executorName, base string, args map[string]string
 	}
 
 	if 0 == len(executorName) {
-		executorName = "sh"
-		fmt.Println("no",stage,"executor specified. using sh")
+		if "windows" == runtime.GOOS {
+			fmt.Println("no",stage,"executor specified. Using powershell")
+			executorName = "powershell"
+		} else {
+			fmt.Println("no",stage,"executor specified. Using sh")
+			executorName = "sh"
+		}
 	}
 
 	var results string
