@@ -682,6 +682,12 @@ func ReadFileLines(path string) ([]string, error) {
 	defer file.Close()
 
 	scanner := bufio.NewScanner(file)
+
+	//adjust the capacity to your need (max characters in line)
+	const maxCapacity = 1024 * 1024 // 1 MB or 1,048,576 characters
+	buf := make([]byte, maxCapacity)
+	scanner.Buffer(buf, maxCapacity)
+
 	for scanner.Scan() {
 		line := scanner.Text()
 		ret = append(ret, line)
