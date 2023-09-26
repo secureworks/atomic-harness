@@ -24,6 +24,7 @@ const (
 	SimpleSchemaETW         SimpleSchemaChar = "E"
 	SimpleSchemaAMSI        SimpleSchemaChar = "I"
 	SimpleSchemaReg         SimpleSchemaChar = "R"
+	SimpleSchemaAPI         SimpleSchemaChar = "X"
 )
 
 type SimpleProcessFields struct {
@@ -103,6 +104,15 @@ type SimpleRegFields struct {
 	ValueData string `json:"value_data,omitempty"` // if present, for SETVALUEKEY
 }
 
+type SimpleAPIFields struct {
+	Pid                    int64  `json:"pid,omitempty"`
+	UniquePid              string `json:"unique_pid,omitempty"`
+	FunctionCalled         string `json:"funcion_called,omitempty"`
+	WasOperationSuccessful bool   `json:"was_operation_successful,omitempty"`
+	ParameterName          string `json:"parameter_name,omitempty"`
+	ParameterValue         string `json:"parameter_value,omitempty"`
+}
+
 type SimpleEvent struct {
 	EventType       SimpleSchemaChar `json:"evt_type"`
 	Timestamp       int64            `json:"ts,omitempty"`
@@ -116,4 +126,5 @@ type SimpleEvent struct {
 	ETWFields         *SimpleETWFields         `json:"evt_etw,omitempty"`
 	AMSIFields        *SimpleAMSIFields        `json:"evt_amsi,omitempty"`
 	RegFields         *SimpleRegFields         `json:"evt_reg,omitempty"`
+	APIFields         *SimpleAPIFields         `json:"evt_api,omitempty"`
 }
