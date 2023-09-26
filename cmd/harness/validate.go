@@ -113,7 +113,9 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			if gDebug {
+				fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			}
 		}
 	}
 	return retval
@@ -199,7 +201,9 @@ func CheckFileEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied.\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			if gDebug {
+				fmt.Printf("ONLY %d of %d FieldChecks satisfied.\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			}
 		}
 	}
 	return retval
@@ -289,7 +293,9 @@ func CheckETWEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			if gDebug {
+				fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			}
 		}
 	}
 	return retval
@@ -325,7 +331,9 @@ func CheckAMSIEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonSt
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			if gDebug {
+				fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			}
 		}
 	}
 
@@ -367,7 +375,9 @@ func CheckRegEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr
 			AddMatchingEvent(testRun, exp, evt)
 			retval = true
 		} else if numMatchingChecks > 0 {
-			fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			if gDebug {
+				fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			}
 		}
 	}
 
