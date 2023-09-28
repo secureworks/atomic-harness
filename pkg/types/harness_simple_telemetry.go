@@ -24,7 +24,7 @@ const (
 	SimpleSchemaETW         SimpleSchemaChar = "E"
 	SimpleSchemaAMSI        SimpleSchemaChar = "I"
 	SimpleSchemaReg         SimpleSchemaChar = "R"
-	SimpleSchemaAPI         SimpleSchemaChar = "X"
+	SimpleSchemaAPI         SimpleSchemaChar = "H" // H represents Hooks used in API Calls
 )
 
 type SimpleProcessFields struct {
@@ -109,8 +109,8 @@ type SimpleAPIFields struct {
 	UniquePid              string `json:"unique_pid,omitempty"`
 	FunctionCalled         string `json:"funcion_called,omitempty"`
 	WasOperationSuccessful bool   `json:"was_operation_successful,omitempty"`
-	ParameterName          string `json:"parameter_name,omitempty"`
-	ParameterValue         string `json:"parameter_value,omitempty"`
+	ParameterNames         string `json:"parameter_names,omitempty"`
+	ParameterValues        string `json:"parameter_values,omitempty"`
 }
 
 type SimpleEvent struct {
