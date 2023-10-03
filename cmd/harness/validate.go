@@ -385,6 +385,50 @@ func CheckRegEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr
 
 }
 
+func CheckApiCallEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJsonStr string) bool {
+	retval := false
+
+	for _, exp := range testRun.criteria.ExpectedEvents {
+		if exp.EventType != "API" {
+			continue
+		}
+
+		numMatchingChecks := 0
+		for _, fc := range exp.FieldChecks {
+			isMatch := false
+			switch fc.FieldName {
+			case "function_called":
+				isMatch = CheckMatch(evt.APIFields.FunctionCalled, fc.Op, fc.Value)
+			case "was_operation_successful":
+				isMatch = CheckMatch(BoolAsString(evt.APIFields.WasOperationSuccessful), fc.Op, fc.Value)
+			case "parameter_names":
+				isMatch = CheckMatch(evt.APIFields.ParameterNames, fc.Op, fc.Value)
+			case "parameter_values":
+				isMatch = CheckMatch(evt.APIFields.ParameterValues, fc.Op, fc.Value)
+			default:
+				fmt.Println("ERROR: unknown FieldName", fc)
+			}
+			if isMatch {
+				if gDebug {
+					fmt.Printf("Field Match '%s' '%s'\n", fc.FieldName, fc.Value)
+				}
+				numMatchingChecks += 1
+			}
+		}
+		if numMatchingChecks == len(exp.FieldChecks) {
+			AddMatchingEvent(testRun, exp, evt)
+			retval = true
+		} else if numMatchingChecks > 0 {
+			if gDebug {
+				fmt.Printf("ONLY %d of %d FieldChecks satisfied\n%s\n", numMatchingChecks, len(exp.FieldChecks), nativeJsonStr)
+			}
+		}
+	}
+
+	return retval
+
+}
+
 func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 	gValidateState = ExtractState{}
 	gValidateState.StartTime = uint64(testRun.StartTime)
@@ -448,6 +492,8 @@ func ValidateSimpleTelemetry(testRun *SingleTestRun, tool *TelemTool) {
 			isMatch = CheckAMSIEvent(testRun, evt, rawEventStr)
 		case types.SimpleSchemaReg:
 			isMatch = CheckRegEvent(testRun, evt, rawEventStr)
+		case types.SimpleSchemaAPI:
+			isMatch = CheckApiCallEvent(testRun, evt, rawEventStr)
 		default:
 			fmt.Println("missing handling of type", line)
 		}
@@ -566,6 +612,8 @@ func GetTelemChar(exp *types.ExpectedEvent) string {
 		return "I"
 	case "REG":
 		return "R"
+	case "API":
+		return "H"
 	default:
 		break
 	}
