@@ -401,9 +401,9 @@ func CheckApiCallEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 				isMatch = CheckMatch(evt.APIFields.FunctionCalled, fc.Op, fc.Value)
 			case "was_operation_successful":
 				isMatch = CheckMatch(BoolAsString(evt.APIFields.WasOperationSuccessful), fc.Op, fc.Value)
-			case "parameter_name":
+			case "parameter_names":
 				isMatch = CheckMatch(evt.APIFields.ParameterNames, fc.Op, fc.Value)
-			case "parameter_value":
+			case "parameter_values":
 				isMatch = CheckMatch(evt.APIFields.ParameterValues, fc.Op, fc.Value)
 			default:
 				fmt.Println("ERROR: unknown FieldName", fc)
