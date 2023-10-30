@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 
 	types "github.com/secureworks/atomic-harness/pkg/types"
@@ -679,7 +680,12 @@ func IsGoArtStage(testRun *SingleTestRun, cmdline string, tsNs int64) bool {
  * Side-effects: will set testRun.TimeWorkDirCreate, TimeWorkDirDelete
  */
 func IsGoArtWorkDirEvent(testRun *SingleTestRun, evt *types.SimpleEvent) bool {
-	if evt.FileFields.TargetPath == testRun.workingDir {
+	workingDirToCompare := testRun.workingDir
+	if runtime.GOOS == "windows" {
+		// This is required since workDir starts with C:\, filemod path starts with /device/harddisk<n>
+		workingDirToCompare = strings.Replace(workingDirToCompare, "C:", "", 1)
+	}
+	if strings.HasSuffix(evt.FileFields.TargetPath, workingDirToCompare) {
 		if evt.FileFields.Action == types.SimpleFileActionDelete {
 			testRun.TimeWorkDirDelete = evt.Timestamp
 		} else if evt.FileFields.Action == types.SimpleFileActionOpenRead {
