@@ -358,11 +358,16 @@ func interpolateWithArgs(interpolatee, base string, args map[string]string, quie
 
 		if AtomicsFolderRegex.MatchString(v) {
 			v = AtomicsFolderRegex.ReplaceAllString(v, "")
-			v = strings.ReplaceAll(v, `\`, `/`)
-			v = strings.TrimSuffix(base, "/") + "/" + v
+			if runtime.GOOS != "windows" {
+				v = strings.ReplaceAll(v, `\`, `/`)
+				v = strings.TrimSuffix(base, "/") + "/" + v
+			} else {
+				v = strings.TrimSuffix(base, "\\") + "\\" + v
+			}
 		}
 
 		interpolated = strings.ReplaceAll(interpolated, "#{"+k+"}", v)
+
 	}
 
 	return interpolated, nil
