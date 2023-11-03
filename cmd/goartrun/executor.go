@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -362,6 +363,7 @@ func interpolateWithArgs(interpolatee, base string, args map[string]string, quie
 			v = strings.TrimSuffix(base, "/") + "/" + v
 		}
 
+		v = filepath.FromSlash(v)
 		interpolated = strings.ReplaceAll(interpolated, "#{"+k+"}", v)
 	}
 
