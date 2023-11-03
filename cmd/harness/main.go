@@ -353,7 +353,7 @@ func AddTestsForTechniqueUsingCriteria(tid string) int {
  */
 func AddTestsForTechniqueUsingAtomicsIndex(targetTid string) int {
 	num := 0
-	a := strings.SplitN(targetTid,"#",2)
+	a := strings.SplitN(targetTid, "#", 2)
 	targetTechniq := a[0]
 	idOrHash := ""
 	if len(a) > 1 {
@@ -378,7 +378,7 @@ func AddTestsForTechniqueUsingAtomicsIndex(targetTid string) int {
 			}
 			//fmt.Println(targetTid, spec)
 			if 0 == len(idOrHash) || spec.TestIndex == idOrHash ||
-				(len(idOrHash)>= 8 && strings.HasPrefix(spec.TestGuid,idOrHash) ) {
+				(len(idOrHash) >= 8 && strings.HasPrefix(spec.TestGuid, idOrHash)) {
 				gTestSpecs = append(gTestSpecs, spec)
 				num += 1
 			}
@@ -699,8 +699,8 @@ func SubstituteSysInfoArgs(spec *types.AtomicTestCriteria) bool {
 		case "$netif":
 			spec.Args[key] = gSysInfo.Netif
 		default:
-			fmt.Println("ERROR unknown ARG variable", key, val)
-			return false
+			fmt.Println("WARN ARG variable not recognized, passing to the executor as is. var_name var_value: ", key, val)
+			continue
 		}
 		fmt.Println("  subtitute", key, val, "->", spec.Args[key])
 	}
