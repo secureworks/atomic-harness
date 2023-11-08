@@ -100,6 +100,8 @@ func CheckProcessEvent(testRun *SingleTestRun, evt *types.SimpleEvent, nativeJso
 				isMatch = CheckMatch(evt.ProcessFields.Env, fc.Op, fc.Value)
 			case "is_elevated":
 				isMatch = CheckMatch(BoolAsString(evt.ProcessFields.IsElevated), fc.Op, fc.Value)
+			case "hashes":
+				isMatch = CheckMatch(evt.ProcessFields.Hashes, fc.Op, fc.Value)
 			default:
 				fmt.Println("ERROR: unknown FieldName", fc)
 			}
