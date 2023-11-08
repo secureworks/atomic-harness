@@ -268,11 +268,8 @@ func FindTestCoverageHelper(dirPath string, atomicMap *map[string][]*types.TestS
 
 	criteria := 0
 	for _, entries := range *atomicMap {
-		for range entries {
-			total += 1
-		}
+		total += len(entries)
 	}
-	//fmt.Println("Found", total, "tests for platform", flagPlatform)
 
 	if err != nil {
 		fmt.Println("ERROR: unable to list files in "+dirPath, err)

@@ -1,11 +1,11 @@
 # Atomic Harness
 
-- **Good News**: The harness and runner now supports Windows and MacOS in addition to Linux!
-- **However**... to make good use of this tool, we need good criteria defined for Windows and MacOS atomic tests.  Help out here: [atomic-validation-criteria](https://github.com/secureworks/atomic-validation-criteria)
+- **Cross-Platform**: The harness and runner work on macos, linux, windows
+- **NOTE**... to make good use of this tool, we need good criteria defined for atomic tests on all platforms.  Help out here: [atomic-validation-criteria](https://github.com/secureworks/atomic-validation-criteria) . Current coverage as of Nov 2023:
 ```
-linux Criteria coverage   : 85.0 % of  260 atomic tests
-macos Criteria coverage   :  3.2 % of  343 atomic tests
-windows Criteria coverage :  0.2 % of 1170 atomic tests
+linux Criteria coverage   : 51.5 % of 443 atomic tests
+macos Criteria coverage   : 17.3 % of 202 atomic tests
+windows Criteria coverage : 12.9 % of 1167 atomic tests
 ```
 
 ## Overview
