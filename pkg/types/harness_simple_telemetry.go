@@ -34,6 +34,7 @@ type SimpleProcessFields struct {
 	ExePath    string `json:"exe_path,omitempty"`
 	Env        string `json:"env,omitempty"`
 	IsElevated bool   `json:"is_elevated,omitempty"`
+	Hashes     string `json:"hashes,omitempty"`
 
 	UniquePid       string `json:"unique_pid",omitempty`
 	ParentUniquePid string `json:"parent_unique_pid,omitempty"`
