@@ -3,16 +3,17 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"os/user"
-	"strconv"
-	"syscall"
+//	"fmt"
+//	"os"
+//	"os/user"
+//	"strconv"
+//	"syscall"
 
 	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
 func ManagePrivilege(atomicTest *types.AtomicTest, runSpec *types.RunSpec) {
+/*
 	usr,err := user.Current()
 	if err != nil {
 		fmt.Println("ERROR: unable to determine current user", err)
@@ -71,4 +72,5 @@ func ManagePrivilege(atomicTest *types.AtomicTest, runSpec *types.RunSpec) {
 		fmt.Println("WARN: test requires Elevated privilege, but running as user",usr)
 		return
 	}
+*/
 }
