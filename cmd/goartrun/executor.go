@@ -356,14 +356,15 @@ func interpolateWithArgs(interpolatee, base string, args map[string]string, quie
 		if !quiet {
 			fmt.Printf("  - interpolating [#{%s}] => [%s]\n", k, v)
 		}
+		if !strings.HasPrefix(v, "http") { // No modification of slashes in case of URLs
+			if AtomicsFolderRegex.MatchString(v) {
+				v = AtomicsFolderRegex.ReplaceAllString(v, "")
+				v = strings.ReplaceAll(v, `\`, `/`)
+				v = strings.TrimSuffix(base, "/") + "/" + v
+			}
 
-		if AtomicsFolderRegex.MatchString(v) {
-			v = AtomicsFolderRegex.ReplaceAllString(v, "")
-			v = strings.ReplaceAll(v, `\`, `/`)
-			v = strings.TrimSuffix(base, "/") + "/" + v
+			v = filepath.FromSlash(v)
 		}
-
-		v = filepath.FromSlash(v)
 		interpolated = strings.ReplaceAll(interpolated, "#{"+k+"}", v)
 	}
 
