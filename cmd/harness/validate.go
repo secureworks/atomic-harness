@@ -51,6 +51,8 @@ func CheckMatch(haystack, op, needle string) bool {
 			return false
 		}
 		return rx.MatchString(haystack)
+	case "!=":
+		return haystack != needle
 	default:
 		fmt.Println("ERROR: unsupported operator", op)
 	}
