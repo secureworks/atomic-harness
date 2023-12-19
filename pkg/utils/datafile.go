@@ -62,6 +62,9 @@ func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, err
 	case '~':
 		fc.Op = "~="
 		namelen -= 1
+	case '!':
+		fc.Op = "!="
+		namelen -= 1
 	default:
 		fc.Op = "="
 	}
