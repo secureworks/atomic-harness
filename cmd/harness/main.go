@@ -70,6 +70,7 @@ var flagRevalidate string
 var flagClearTelemetryCache bool
 var flagFilterByGoartrunShell bool
 var flagFilterFileEventsTmp bool
+var flagTimeout int64
 
 var gTestSpecs []*types.TestSpec = []*types.TestSpec{}
 var gRecs []*types.AtomicTestCriteria = []*types.AtomicTestCriteria{} // our detection rules
@@ -103,6 +104,7 @@ func init() {
 	flag.BoolVar(&flagClearTelemetryCache, "telemetryclear", false, "if true, will call telemetry tool to clear cache")
 	flag.BoolVar(&flagFilterByGoartrunShell, "filtergoartsh", true, "if true, do not validate events before/after goartrun test shell")
 	flag.BoolVar(&flagFilterFileEventsTmp, "filtergoartdir", true, "if true, do not validate events before/after create and delete of goartrun working dir. Working dir is in /tmp, so if that is not in the file monitoring paths of endpoint agent, set this to false.")
+	flag.Int64Var(&flagTimeout, "timeout", 30, "timeout duration in seconds")
 }
 
 /*
@@ -729,7 +731,7 @@ func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsD
 	obj.ResultsDir, _ = filepath.Abs(filepath.FromSlash(resultsDir))
 	obj.Inputs = spec.Args
 	obj.Username = flagRegularRunUser
-
+	obj.Timeout = flagTimeout
 	os.Mkdir(obj.ResultsDir, 0777)
 
 	j, err := json.MarshalIndent(obj, "", "  ")
