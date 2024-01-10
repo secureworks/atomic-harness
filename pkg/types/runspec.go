@@ -19,7 +19,8 @@ type RunSpec struct {
 	Inputs map[string]string
 	//Envs       []string
 
-	Stage string
+	Stage   string
+	Timeout int64
 }
 
 type TestState int
