@@ -17,31 +17,30 @@ import (
 )
 
 var flagTechniqueId string
-var flagTestName    string
-var flagTestIndex   int
-var flagTestStage   string
+var flagTestName string
+var flagTestIndex int
+var flagTestStage string
 var flagAtomicsPath string
-var flagTempDir     string
+var flagTempDir string
 var flagRunSpecPath string
 var flagResultsFormat string
 var flagResultsDir string
 
 var AtomicsFolderRegex = regexp.MustCompile(`PathToAtomicsFolder(\\|\/)`)
-var BlockQuoteRegex    = regexp.MustCompile(`<\/?blockquote>`)
+var BlockQuoteRegex = regexp.MustCompile(`<\/?blockquote>`)
 
 func init() {
-        flag.StringVar(&flagTechniqueId, "t", "", "technique ID")
-        flag.StringVar(&flagTestName, "n", "", "test name")
-        flag.IntVar(&flagTestIndex, "i", -1, "0-based test index")
+	flag.StringVar(&flagTechniqueId, "t", "", "technique ID")
+	flag.StringVar(&flagTestName, "n", "", "test name")
+	flag.IntVar(&flagTestIndex, "i", -1, "0-based test index")
 
-        flag.StringVar(&flagTestStage, "stage", "", "single stage (checkprereq, getprereq, test, cleanup)")
-        flag.StringVar(&flagAtomicsPath, "atomicsdir", "", "path to atomics folder (required)")
-        flag.StringVar(&flagTempDir, "tempdir", "", "path to working folder to use for test. Will be random if not set")
-        flag.StringVar(&flagRunSpecPath, "config", "", "path to RunSpec config. Use - for stdin")
-        flag.StringVar(&flagResultsFormat, "resultsformat", "json", "json or yaml output summary file")
-        flag.StringVar(&flagResultsDir, "resultsdir", "", "location to save output")
+	flag.StringVar(&flagTestStage, "stage", "", "single stage (checkprereq, getprereq, test, cleanup)")
+	flag.StringVar(&flagAtomicsPath, "atomicsdir", "", "path to atomics folder (required)")
+	flag.StringVar(&flagTempDir, "tempdir", "", "path to working folder to use for test. Will be random if not set")
+	flag.StringVar(&flagRunSpecPath, "config", "", "path to RunSpec config. Use - for stdin")
+	flag.StringVar(&flagResultsFormat, "resultsformat", "json", "json or yaml output summary file")
+	flag.StringVar(&flagResultsDir, "resultsdir", "", "location to save output")
 }
-
 
 func LoadRunSpec(path string, runSpec *types.RunSpec) error {
 	var err error
@@ -72,13 +71,12 @@ func FillRunSpecFromFlags(runSpec *types.RunSpec) {
 
 	// TODO: get input args
 	/*
-	for _, arg := range flag.Args() {
-		// get input settings and env variables
+		for _, arg := range flag.Args() {
+			// get input settings and env variables
 
-	}*/
+		}*/
 
 }
-
 
 func main() {
 	flag.Parse()
@@ -90,7 +88,7 @@ func main() {
 	} else {
 		FillRunSpecFromFlags(runSpec)
 	}
-
+	timeout := runSpec.Timeout
 	// TODO: check for required params
 
 	atomicTest, err := getTest(runSpec.Technique, runSpec.TestName, runSpec.TestIndex, runSpec)
@@ -108,7 +106,7 @@ func main() {
 		os.Chmod(runSpec.TempDir, 0777)
 	} else {
 		// TODO check if exists
-		err = os.MkdirAll(runSpec.TempDir,0777)
+		err = os.MkdirAll(runSpec.TempDir, 0777)
 		if err != nil {
 			fmt.Println("Error making temp dir", runSpec.TempDir, err)
 			os.Exit(int(types.StatusRunnerFailure))
@@ -117,7 +115,7 @@ func main() {
 	defer os.RemoveAll(runSpec.TempDir)
 
 	if runSpec.ResultsDir != "" {
-		err = os.MkdirAll(runSpec.ResultsDir,0777)
+		err = os.MkdirAll(runSpec.ResultsDir, 0777)
 		if err != nil {
 			fmt.Println("Error making results dir", runSpec.ResultsDir, err)
 			os.Exit(int(types.StatusRunnerFailure))
@@ -128,7 +126,7 @@ func main() {
 		ManagePrivilege(atomicTest, runSpec)
 	}
 
-	test, err, status := Execute(atomicTest, runSpec)
+	test, err, status := Execute(atomicTest, runSpec, int(timeout))
 	if err != nil {
 		fmt.Println("error occurred:", err)
 		if test == nil {
@@ -145,7 +143,7 @@ func main() {
 	err = nil
 	switch ext {
 	case "json":
-		plan, err = json.MarshalIndent(test,"","  ")
+		plan, err = json.MarshalIndent(test, "", "  ")
 		if err != nil {
 			fmt.Println("failed to marshal report", err)
 		}

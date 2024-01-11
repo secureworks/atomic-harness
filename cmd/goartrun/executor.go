@@ -16,7 +16,7 @@ import (
 
 var SupportedExecutors = []string{"bash", "sh", "command_prompt", "powershell"}
 
-func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest, error, types.TestStatus) {
+func Execute(test *types.AtomicTest, runSpec *types.RunSpec, timeout int) (*types.AtomicTest, error, types.TestStatus) {
 	tid := runSpec.Technique
 	env := []string{} // TODO
 
@@ -69,7 +69,7 @@ func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest,
 	for _, stage = range stages {
 		switch stage {
 		case "cleanup":
-			_, err = executeStage(stage, test.Executor.CleanupCommand, test.Executor.Name, test.BaseDir, args, env, tid, test.Name, runSpec)
+			_, err = executeStage(stage, test.Executor.CleanupCommand, test.Executor.Name, test.BaseDir, args, env, tid, test.Name, runSpec, timeout)
 			if err != nil {
 				fmt.Println("WARNING. Cleanup command failed", err)
 			} else {
@@ -91,14 +91,14 @@ func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest,
 				for i, dep := range test.Dependencies {
 					fmt.Printf("  - %s", dep.Description)
 
-					_, err := executeStage(fmt.Sprintf("checkPrereq%d", i), dep.PrereqCommand, executorName, test.BaseDir, args, env, tid, test.Name, runSpec)
+					_, err := executeStage(fmt.Sprintf("checkPrereq%d", i), dep.PrereqCommand, executorName, test.BaseDir, args, env, tid, test.Name, runSpec, timeout)
 
 					if err == nil {
 						fmt.Printf("   * OK - dependency check succeeded!\n")
 						continue
 					}
 
-					result, err := executeStage(fmt.Sprintf("getPrereq%d", i), dep.GetPrereqCommand, executorName, test.BaseDir, args, env, tid, test.Name, runSpec)
+					result, err := executeStage(fmt.Sprintf("getPrereq%d", i), dep.GetPrereqCommand, executorName, test.BaseDir, args, env, tid, test.Name, runSpec, timeout)
 
 					if err != nil {
 						if result == "" {
@@ -121,7 +121,7 @@ func Execute(test *types.AtomicTest, runSpec *types.RunSpec) (*types.AtomicTest,
 			}
 			test.StartTime = time.Now().UnixNano()
 
-			results, err := executeStage(stage, test.Executor.Command, test.Executor.Name, test.BaseDir, args, env, tid, test.Name, runSpec)
+			results, err := executeStage(stage, test.Executor.Command, test.Executor.Name, test.BaseDir, args, env, tid, test.Name, runSpec, timeout)
 
 			test.EndTime = time.Now().UnixNano()
 
@@ -286,7 +286,7 @@ func checkPlatform(test *types.AtomicTest) error {
 	return nil
 }
 
-func executeStage(stage, cmds, executorName, base string, args map[string]string, env []string, technique, testName string, runSpec *types.RunSpec) (string, error) {
+func executeStage(stage, cmds, executorName, base string, args map[string]string, env []string, technique, testName string, runSpec *types.RunSpec, timeout int) (string, error) {
 	quiet := true
 
 	if stage == "test" {
@@ -317,13 +317,13 @@ func executeStage(stage, cmds, executorName, base string, args map[string]string
 	var results string
 	switch executorName {
 	case "bash":
-		results, err = executeShell("bash", command, env, stage, technique, testName, runSpec)
+		results, err = executeShell("bash", command, env, stage, technique, testName, runSpec, timeout)
 	case "sh":
-		results, err = executeShell("sh", command, env, stage, technique, testName, runSpec)
+		results, err = executeShell("sh", command, env, stage, technique, testName, runSpec, timeout)
 	case "command_prompt":
-		results, err = executeCMD("CMD", command, env, stage, technique, testName, runSpec)
+		results, err = executeCMD("CMD", command, env, stage, technique, testName, runSpec, timeout)
 	case "powershell":
-		results, err = executePS("POWERSHELL", command, env, stage, technique, testName, runSpec)
+		results, err = executePS("POWERSHELL", command, env, stage, technique, testName, runSpec, timeout)
 	default:
 		err = fmt.Errorf("unknown executor: " + executorName)
 	}
@@ -371,7 +371,7 @@ func interpolateWithArgs(interpolatee, base string, args map[string]string, quie
 	return interpolated, nil
 }
 
-func executeShell(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec) (string, error) {
+func executeShell(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec, timeout int) (string, error) {
 	fmt.Printf("\nExecuting executor=%s command=[%s]\n", shellName, command)
 
 	f, err := os.Create(runSpec.TempDir + "/goart-" + technique + "-" + stage + "." + shellName)
@@ -392,10 +392,7 @@ func executeShell(shellName string, command string, env []string, stage string, 
 
 	// guard against hanging tests - kill after a timeout
 
-	timeoutSec := 30 * time.Second
-	if stage != "test" {
-		timeoutSec = 15 * time.Second
-	}
+	timeoutSec := time.Duration(timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
 	defer cancel()
 
@@ -424,7 +421,7 @@ func executeShell(shellName string, command string, env []string, stage string, 
 	return string(output), nil
 }
 
-func executeCMD(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec) (string, error) {
+func executeCMD(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec, timeout int) (string, error) {
 	fmt.Printf("\nExecuting executor=%s command=[%s]\n", shellName, command)
 
 	f, err := os.Create(runSpec.TempDir + "\\goart-" + technique + "-" + stage + ".bat")
@@ -445,10 +442,7 @@ func executeCMD(shellName string, command string, env []string, stage string, te
 
 	// guard against hanging tests - kill after a timeout
 
-	timeoutSec := 30 * time.Second
-	if stage != "test" {
-		timeoutSec = 15 * time.Second
-	}
+	timeoutSec := time.Duration(timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
 	defer cancel()
 
@@ -467,7 +461,7 @@ func executeCMD(shellName string, command string, env []string, stage string, te
 	return string(output), nil
 }
 
-func executePS(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec) (string, error) {
+func executePS(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec, timeout int) (string, error) {
 	fmt.Printf("\nExecuting executor=%s command=[%s]\n", shellName, command)
 
 	f, err := os.Create(runSpec.TempDir + "\\goart-" + technique + "-" + stage + ".ps1")
@@ -488,10 +482,7 @@ func executePS(shellName string, command string, env []string, stage string, tec
 
 	// guard against hanging tests - kill after a timeout
 
-	timeoutSec := 30 * time.Second
-	if stage != "test" {
-		timeoutSec = 15 * time.Second
-	}
+	timeoutSec := time.Duration(timeout) * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeoutSec)
 	defer cancel()
 
