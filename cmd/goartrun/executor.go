@@ -462,6 +462,7 @@ func executeCMD(shellName string, command string, env []string, stage string, te
 }
 
 func executePS(shellName string, command string, env []string, stage string, technique string, testName string, runSpec *types.RunSpec, timeout int) (string, error) {
+	command = "$ErrorActionPreference = \"Stop\"\n" + command // If a command fails then subsequent commands will not be executed
 	fmt.Printf("\nExecuting executor=%s command=[%s]\n", shellName, command)
 
 	f, err := os.Create(runSpec.TempDir + "\\goart-" + technique + "-" + stage + ".ps1")
