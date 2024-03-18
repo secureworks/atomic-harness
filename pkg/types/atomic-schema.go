@@ -25,17 +25,6 @@ type AtomicTest struct {
 
 	Dependencies []Dependency    `yaml:"dependencies,omitempty"`
 	Executor     *AtomicExecutor `yaml:"executor"`
-
-	// from here down are not part of schema, used for state
-
-	BaseDir string `yaml:"-"`
-	TempDir string `yaml:"tempdir"`
-
-	Status      int               `yaml:"test_status,omitempty"`
-	IsCleanedUp bool              `yaml:"is_cleaned_up,omitempty"`
-	ArgsUsed    map[string]string `yaml:"args_used,omitempty"`
-	StartTime   int64
-	EndTime     int64
 }
 
 type InputArgument struct {
@@ -57,6 +46,4 @@ type AtomicExecutor struct {
 	Command           string `yaml:"command,omitempty"`
 	Steps             string `yaml:"steps,omitempty"`
 	CleanupCommand    string `yaml:"cleanup_command,omitempty"`
-
-	ExecutedCommand map[string]interface{} `yaml:"executed_command,omitempty"`
 }

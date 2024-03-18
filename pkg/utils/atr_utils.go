@@ -7,6 +7,7 @@ package utils
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -48,7 +49,7 @@ func LoadAtomicsTechniqueYaml(tid string, atomicsDir string) (*types.Atomic, err
 		return &technique, nil
 	}
 
-	return nil, fmt.Errorf("missing atomic", tid)
+	return nil, errors.New("missing atomic " + tid)
 }
 
 func GetPlatformName() string {

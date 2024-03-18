@@ -7,6 +7,7 @@ package utils
 import (
 	"bytes"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -47,7 +48,7 @@ func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, err
 			// assume it's a path
 			a = []string{"path", str}
 		} else {
-			return nil, fmt.Errorf("no operator")
+			return nil, errors.New("no operator")
 		}
 	}
 	fc := &types.FieldCriteria{}
@@ -77,7 +78,7 @@ func ParseFieldCriteria(str string, eventType string) (*types.FieldCriteria, err
 
 func EventFromRow(id int, row []string) types.ExpectedEvent {
 	obj := types.ExpectedEvent{}
-	obj.Id = string(id)
+	obj.Id = fmt.Sprintf("%d",id)
 	obj.EventType = row[1] //strings.ToTitle(strings.ToLower(row[1]))
 	idx := 2
 	ET := strings.ToUpper(obj.EventType)

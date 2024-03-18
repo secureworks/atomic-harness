@@ -20,6 +20,7 @@ import (
 	"syscall"
 	"time"
 
+	"gopkg.in/yaml.v3"
 	types "github.com/secureworks/atomic-harness/pkg/types"
 	utils "github.com/secureworks/atomic-harness/pkg/utils"
 )
@@ -51,6 +52,8 @@ type TelemTool struct {
 	Path   string // /some/path/to/telemtool_e2e.exe
 	Suffix string // _e2e
 }
+
+var AtomicsFolderRegex = regexp.MustCompile(`PathToAtomicsFolder(\\|\/)`)
 
 var kTestRunTimeoutSeconds = 10 * time.Second
 var kWaitTelemetrySeconds = 35
@@ -580,14 +583,14 @@ func UpdateTimestampsFromRunSummary(testRun *SingleTestRun) {
 		}
 		return
 	}
-	runSpec := &types.AtomicTest{}
-	if err = json.Unmarshal(data, runSpec); err != nil {
+	results := &types.ScriptResults{}
+	if err = json.Unmarshal(data, results); err != nil {
 		fmt.Println("Error parsing run_summary.json", path, err)
 		return
 	}
 
-	testRun.StartTime = runSpec.StartTime
-	testRun.EndTime = runSpec.EndTime
+	testRun.StartTime = results.StartTime
+	testRun.EndTime = results.EndTime
 }
 
 // echo runSpecJson | ./bin/goart --config -
@@ -721,15 +724,15 @@ ResultsDir string
 
 Inputs     map[string]string
 */
-func BuildRunSpec(spec *types.AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
+func BuildRunSpec(atomic *types.AtomicTest, TestIndex int, spec *types.AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
 	obj := types.RunSpec{}
-	obj.Technique = spec.Technique
-	obj.TestGuid = spec.TestGuid
-	obj.TestIndex = int(spec.TestIndex - 1)
+	obj.ID = fmt.Sprintf("%s #%d", spec.Technique, TestIndex+1)
+	obj.Label = spec.TestName
 	obj.TempDir = filepath.FromSlash(atomicTempDir)
-	obj.AtomicsDir, _ = filepath.Abs(filepath.FromSlash(flagAtomicsPath))
 	obj.ResultsDir, _ = filepath.Abs(filepath.FromSlash(resultsDir))
-	obj.Inputs = spec.Args
+	obj.Script = atomic.Executor
+	obj.Dependencies = atomic.Dependencies
+	// TODO: environment variable overrides?
 	obj.Username = flagRegularRunUser
 	obj.Timeout = flagTimeout
 	os.Mkdir(obj.ResultsDir, 0777)
@@ -1025,6 +1028,148 @@ func LoadTechniquesList(filename string) error {
 	return nil
 }
 
+
+func checkPlatform(test *types.AtomicTest) error {
+	var platform string
+
+	switch runtime.GOOS {
+	case "linux", "freebsd", "netbsd", "openbsd", "solaris":
+		platform = "linux"
+	case "darwin":
+		platform = "macos"
+	case "windows":
+		platform = "windows"
+	}
+
+	if platform == "" {
+		return fmt.Errorf("unable to detect our platform")
+	}
+
+	if gVerbose {
+		fmt.Println("platform:",platform, "test:", test.SupportedPlatforms)
+	}
+
+	for _, p := range test.SupportedPlatforms {
+		if p == platform {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("unable to run test that supports platforms %v because we are on %s", test.SupportedPlatforms, platform)
+}
+
+func LoadAtomic(Technique string, TestIndex uint, TestGuid, flagAtomicsPath string, isVerbose bool) (*types.AtomicTest,int) {
+	var body []byte
+
+	// Check to see if test is defined locally first. If not, body will be nil
+	// and the test will be loaded below.
+	atomicsPath, _ := filepath.Abs(flagAtomicsPath)
+	path := atomicsPath + "/" + Technique + "/" + Technique + ".yaml"
+	if isVerbose {
+		fmt.Println("loading", path)
+	}
+	body, _ = os.ReadFile(path)
+	if len(body) == 0 {
+		path = strings.ReplaceAll(path, ".yaml", ".yml")
+		fmt.Println("loading", path)
+		body, _ = os.ReadFile(path)
+	}
+
+	if len(body) == 0 {
+		fmt.Println("Failed to load atomic for ", Technique)
+		return nil,0
+	}
+
+	var atoms types.Atomic
+
+	if err := yaml.Unmarshal(body, &atoms); err != nil {
+		fmt.Println("processing Atomic Test YAML file", err)
+		return nil,0
+	}
+
+	for i, testInfo := range atoms.AtomicTests {
+		if TestIndex > 0 {
+			if (TestIndex - 1) != uint(i) {
+				continue
+			}
+		} else if len(TestGuid) > 0 {
+			if !strings.HasPrefix(testInfo.GUID, TestGuid) {
+				continue
+			}
+		} else {
+			fmt.Println("Criteria missing TestNum or TestGuid", Technique, TestIndex, TestGuid)
+			return nil,0
+		}
+		return &testInfo, i
+	}
+	return nil,0
+}
+
+func FillArgDefaults(atomicTest *types.AtomicTest, criteria *types.AtomicTestCriteria, atomicsPath string) {
+	for name, obj := range atomicTest.InputArugments {
+		_, ok := criteria.Args[name]
+		if ok {
+			continue // we have override value
+		}
+		if gVerbose {
+			fmt.Printf("  Loading default arg %s:'%s'\n", name, obj.Default)
+		}
+
+		val := strings.ReplaceAll(obj.Default, "$PathToAtomicsFolder", atomicsPath)
+		val = strings.ReplaceAll(val, "PathToAtomicsFolder", atomicsPath)
+
+		criteria.Args[name] = val
+	}
+}
+
+func consolidateArgs(atomic *types.AtomicTest, criteria *types.AtomicTestCriteria) map[string]string {
+	args := map[string]string{}
+	// get test defaults
+	for key,entry := range atomic.InputArugments {
+		args[key] = entry.Default
+	}
+	// override with criteria args
+	for key,val := range criteria.Args {
+		args[key] = val
+	}
+	return args
+}
+
+func interpolateWithArgs(interpolatee string, atomic *types.AtomicTest, args map[string]string) string {
+	interpolated := strings.TrimSpace(interpolatee)
+
+	// replace folder path if present in script
+
+	interpolated = strings.ReplaceAll(interpolated, "$PathToAtomicsFolder", flagAtomicsPath)
+	interpolated = strings.ReplaceAll(interpolated, "PathToAtomicsFolder", flagAtomicsPath)
+
+	if len(args) == 0 {
+		return interpolated
+	}
+
+	if gVerbose {
+		fmt.Println("\nInterpolating command with input arguments...")
+	}
+
+	for k, v := range args {
+		if gVerbose {
+			fmt.Printf("  - interpolating [#{%s}] => [%s]\n", k, v)
+		}
+		if !strings.HasPrefix(v, "http") { // No modification of slashes in case of URLs
+			if AtomicsFolderRegex.MatchString(v) {
+				v = AtomicsFolderRegex.ReplaceAllString(v, "")
+				v = strings.ReplaceAll(v, `\`, `/`)
+				v = strings.TrimSuffix(flagAtomicsPath, "/") + "/" + v
+			}
+
+			v = filepath.FromSlash(v)
+		}
+		interpolated = strings.ReplaceAll(interpolated, "#{"+k+"}", v)
+	}
+
+	return interpolated
+}
+
 func RunTests() {
 	numTestsRun := 0
 	testRuns := []*SingleTestRun{}
@@ -1050,8 +1195,19 @@ func RunTests() {
 
 			SaveState(testRuns)
 
-			if ShouldBeSkipped(rec) {
-				fmt.Println("Test Warning - skipping", testRun.criteria.Technique, testRun.criteria.TestName)
+			// load atomic to get default args
+			atomic,testIndex := LoadAtomic(rec.Technique, rec.TestIndex, rec.TestGuid, filepath.FromSlash(flagAtomicsPath), gVerbose)
+			if atomic != nil {
+				err = checkPlatform(atomic)
+				if err != nil {
+					fmt.Println("ERROR: Unable to find atomic test for ", rec)
+				} else {
+					FillArgDefaults(atomic, rec, filepath.FromSlash(flagAtomicsPath))
+				}
+			}
+
+			if atomic == nil || err != nil || ShouldBeSkipped(rec) {
+				fmt.Println("Test Warning - skipping", testRun.criteria.Technique, testRun.criteria.TestName, err)
 				fmt.Println("   " + testRun.criteria.Warnings[0])
 				MarkAsSkipped(testRun)
 				SaveState(testRuns)
@@ -1066,18 +1222,26 @@ func RunTests() {
 
 			testRun.workingDir = workingDir
 
-			// load atomic to get default args
-			utils.LoadAtomicDefaultArgs(rec, filepath.FromSlash(flagAtomicsPath), gVerbose)
-
 			// some test Args and field checks need variable substitutions
 
-			if false == SubstituteSysInfoArgs(rec) || false == SubstituteVarsInCriteria(testRun.criteria) {
+			if false == SubstituteSysInfoArgs(testRun.criteria) || false == SubstituteVarsInCriteria(testRun.criteria) {
 				MarkAsSkipped(testRun)
 				SaveState(testRuns)
 				continue
 			}
 
-			runConfig := BuildRunSpec(rec, workingDir, resultsDir)
+			args := consolidateArgs(atomic, testRun.criteria)
+
+			// test script and dependency scripts may need subsitution
+
+			atomic.Executor.Command = interpolateWithArgs(atomic.Executor.Command, atomic, args)
+			for i,_ := range atomic.Dependencies {
+				dep := &atomic.Dependencies[i]
+				dep.PrereqCommand = interpolateWithArgs(dep.PrereqCommand, atomic, args)
+				dep.GetPrereqCommand = interpolateWithArgs(dep.GetPrereqCommand, atomic, args)
+			}
+
+			runConfig := BuildRunSpec(atomic, testIndex, testRun.criteria, workingDir, resultsDir)
 			if runConfig == "" {
 				fmt.Println("empty runconfig!, skipping", rec)
 				continue
@@ -1300,6 +1464,12 @@ func Revalidate(prevResultsDir string) {
 	fmt.Println(SPrintState(testRuns, true))
 }
 
+/*
+ * Given a path to telemetry tool, returns suffix, if any.
+ * Examples:
+ *  telemtool          -> ""
+ *  telemtool_e2e.exe  -> "_e2e"
+ */
 func GetToolNameAndSuffixFromPath(path string) (string, string) {
 	retval := ""
 	_, name := filepath.Split(path)
