@@ -464,10 +464,14 @@ func FindCriteriaForTestSpecs() bool {
 /*
  * @return true if all substitutions were met
  */
-func SubstituteVarsInCriteria(criteria *types.AtomicTestCriteria) bool {
+func SubstituteVarsInCriteria(criteria *types.AtomicTestCriteria, args map[string]string) bool {
 
-	for key, val := range criteria.Args {
+	for key, val := range args {
 		needle := "#{" + key + "}"
+
+		val = strings.ReplaceAll(val, "$PathToAtomicsFolder", flagAtomicsPath)
+		val = strings.ReplaceAll(val, "PathToAtomicsFolder", flagAtomicsPath)
+
 		for i, exp := range criteria.ExpectedEvents {
 			for j, f := range exp.FieldChecks {
 				if strings.Contains(f.Value, needle) {
@@ -713,20 +717,13 @@ func SubstituteSysInfoArgs(spec *types.AtomicTestCriteria) bool {
 }
 
 /*
-Technique  string
-TestName   string
-TestGuid   string
-TestIndex  int
-
-AtomicsDir string
-TempDir    string
-ResultsDir string
-
-Inputs     map[string]string
+ * Builds and renders a types.RunSpec into $resultsDir/runspec.json
+ * On windows, returns path to JSON file
+ * On unix,macos returns JSON content string
 */
 func BuildRunSpec(atomic *types.AtomicTest, TestIndex int, spec *types.AtomicTestCriteria, atomicTempDir string, resultsDir string) string {
 	obj := types.RunSpec{}
-	obj.ID = fmt.Sprintf("%s #%d", spec.Technique, TestIndex+1)
+	obj.ID = spec.Technique   // don't change - used for script name and validation
 	obj.Label = spec.TestName
 	obj.TempDir = filepath.FromSlash(atomicTempDir)
 	obj.ResultsDir, _ = filepath.Abs(filepath.FromSlash(resultsDir))
@@ -1058,14 +1055,15 @@ func checkPlatform(test *types.AtomicTest) error {
 	return fmt.Errorf("unable to run test that supports platforms %v because we are on %s", test.SupportedPlatforms, platform)
 }
 
-func LoadAtomic(Technique string, TestIndex uint, TestGuid, flagAtomicsPath string, isVerbose bool) (*types.AtomicTest,int) {
+func LoadAtomic(Technique string, TestNum uint, TestGuid, flagAtomicsPath string, isVerbose bool) (*types.AtomicTest,int) {
 	var body []byte
+	TestGuid = strings.ToLower(TestGuid)
 
 	// Check to see if test is defined locally first. If not, body will be nil
 	// and the test will be loaded below.
 	atomicsPath, _ := filepath.Abs(flagAtomicsPath)
 	path := atomicsPath + "/" + Technique + "/" + Technique + ".yaml"
-	if isVerbose {
+	if true { //isVerbose {
 		fmt.Println("loading", path)
 	}
 	body, _ = os.ReadFile(path)
@@ -1088,16 +1086,16 @@ func LoadAtomic(Technique string, TestIndex uint, TestGuid, flagAtomicsPath stri
 	}
 
 	for i, testInfo := range atoms.AtomicTests {
-		if TestIndex > 0 {
-			if (TestIndex - 1) != uint(i) {
+		if len(TestGuid) > 0 {
+			if !strings.HasPrefix(strings.ToLower(testInfo.GUID), TestGuid) {
 				continue
 			}
-		} else if len(TestGuid) > 0 {
-			if !strings.HasPrefix(testInfo.GUID, TestGuid) {
+		} else 	if TestNum > 0 {
+			if (TestNum - 1) != uint(i) {
 				continue
 			}
 		} else {
-			fmt.Println("Criteria missing TestNum or TestGuid", Technique, TestIndex, TestGuid)
+			fmt.Println("Criteria missing TestNum or TestGuid", Technique, TestNum, TestGuid)
 			return nil,0
 		}
 		return &testInfo, i
@@ -1180,20 +1178,13 @@ func RunTests() {
 
 		for _, rec := range spec.Criteria {
 
-			resultsDir := filepath.FromSlash(flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d", rec.TestIndex) + "_" + rec.TestGuid)
-			err := os.MkdirAll(resultsDir, 0777)
-			if err != nil {
-				fmt.Println("unable to make results dir", err)
-				os.Exit(1)
-			}
-
 			testRun := &SingleTestRun{}
 			testRun.criteria = rec
-			testRun.resultsDir = resultsDir
 			testRun.state = types.StateCriteriaLoaded
 			testRuns = append(testRuns, testRun)
 
 			SaveState(testRuns)
+			var err error
 
 			// load atomic to get default args
 			atomic,testIndex := LoadAtomic(rec.Technique, rec.TestIndex, rec.TestGuid, filepath.FromSlash(flagAtomicsPath), gVerbose)
@@ -1206,9 +1197,30 @@ func RunTests() {
 				}
 			}
 
-			if atomic == nil || err != nil || ShouldBeSkipped(rec) {
-				fmt.Println("Test Warning - skipping", testRun.criteria.Technique, testRun.criteria.TestName, err)
-				fmt.Println("   " + testRun.criteria.Warnings[0])
+			if atomic == nil || ShouldBeSkipped(rec) {
+				fmt.Println("Test Warning - skipping", testRun.criteria.Technique, testRun.criteria.TestName)
+				if len(testRun.criteria.Warnings) > 0 {
+					fmt.Println("   " + testRun.criteria.Warnings[0])
+				}
+				MarkAsSkipped(testRun)
+				SaveState(testRuns)
+				continue
+			}
+
+			// Important - criteria most likely specifies the GUID prefix rather than
+			// the test number which can change if a new test is added in middle of yaml.
+			// If guid is in criteria, the testIndex is unset.
+			// So always update criteria with actual test index.
+			// It's used in `validate.go` to find Process event start/end of test.
+			// TODO: criteria.TestIndex should be renamed to TestNum!!
+
+			testRun.criteria.TestIndex = uint(testIndex + 1)
+
+			resultsDir := filepath.FromSlash(flagResultsPath + "/" + rec.Technique + "_" + fmt.Sprintf("%d", testRun.criteria.TestIndex))
+			testRun.resultsDir = resultsDir
+			err = os.MkdirAll(resultsDir, 0777)
+			if err != nil {
+				fmt.Println("unable to make results dir", err, resultsDir)
 				MarkAsSkipped(testRun)
 				SaveState(testRuns)
 				continue
@@ -1217,24 +1229,27 @@ func RunTests() {
 			workingDir, err := os.MkdirTemp("", "artwork-"+spec.Technique+"_"+fmt.Sprintf("%d", testRun.criteria.TestIndex)+"-")
 			if err != nil {
 				fmt.Println("unable to make working dir", err)
-				os.Exit(1)
-			}
-
-			testRun.workingDir = workingDir
-
-			// some test Args and field checks need variable substitutions
-
-			if false == SubstituteSysInfoArgs(testRun.criteria) || false == SubstituteVarsInCriteria(testRun.criteria) {
 				MarkAsSkipped(testRun)
 				SaveState(testRuns)
 				continue
 			}
 
 			args := consolidateArgs(atomic, testRun.criteria)
+			testRun.workingDir = workingDir
+
+
+			// some test Args and field checks need variable substitutions
+
+			if false == SubstituteSysInfoArgs(testRun.criteria) || false == SubstituteVarsInCriteria(testRun.criteria, args) {
+				MarkAsSkipped(testRun)
+				SaveState(testRuns)
+				continue
+			}
 
 			// test script and dependency scripts may need subsitution
 
 			atomic.Executor.Command = interpolateWithArgs(atomic.Executor.Command, atomic, args)
+			atomic.Executor.CleanupCommand = interpolateWithArgs(atomic.Executor.CleanupCommand, atomic, args)
 			for i,_ := range atomic.Dependencies {
 				dep := &atomic.Dependencies[i]
 				dep.PrereqCommand = interpolateWithArgs(dep.PrereqCommand, atomic, args)
@@ -1437,11 +1452,19 @@ func Revalidate(prevResultsDir string) {
 			testRun.workingDir = runConfig.TempDir
 
 			// load atomic to get default args
-			utils.LoadAtomicDefaultArgs(rec, filepath.FromSlash(flagAtomicsPath), gVerbose)
+			atomic,_ := LoadAtomic(rec.Technique, rec.TestIndex, rec.TestGuid, filepath.FromSlash(flagAtomicsPath), gVerbose)
+
+			if atomic == nil {
+				fmt.Println("Test Warning - skipping", testRun.criteria.Technique, testRun.criteria.TestName, err)
+				continue
+			}
+
+			FillArgDefaults(atomic, rec, filepath.FromSlash(flagAtomicsPath))
+			args := consolidateArgs(atomic, testRun.criteria)
 
 			// some test Args and field checks need variable substitutions
 
-			if false == SubstituteSysInfoArgs(rec) || false == SubstituteVarsInCriteria(testRun.criteria) {
+			if false == SubstituteSysInfoArgs(rec) || false == SubstituteVarsInCriteria(testRun.criteria, args) {
 				MarkAsSkipped(testRun)
 				SaveState(testRuns)
 				continue
