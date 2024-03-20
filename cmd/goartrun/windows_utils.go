@@ -6,6 +6,6 @@ import (
    types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
-func ManagePrivilege(atomicTest *types.AtomicTest, runSpec *types.RunSpec) {
+func ManagePrivilege(runSpec *types.RunSpec) {
    // TODO: implement windows equivalent
 }

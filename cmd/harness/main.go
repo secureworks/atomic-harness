@@ -729,6 +729,8 @@ func BuildRunSpec(atomic *types.AtomicTest, TestIndex int, spec *types.AtomicTes
 	obj.ResultsDir, _ = filepath.Abs(filepath.FromSlash(resultsDir))
 	obj.Script = atomic.Executor
 	obj.Dependencies = atomic.Dependencies
+	obj.DependencyExecutorName = atomic.DependencyExecutorName
+
 	// TODO: environment variable overrides?
 	obj.Username = flagRegularRunUser
 	obj.Timeout = flagTimeout
