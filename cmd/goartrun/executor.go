@@ -74,14 +74,14 @@ func Execute(runSpec *types.RunSpec, timeout int) (*types.ScriptResults, error, 
 				for i, dep := range runSpec.Dependencies {
 					fmt.Printf("  - %s", dep.Description)
 
-					_, err := executeStage(fmt.Sprintf("checkPrereq%d", i), runSpec.Script.Name, dep.PrereqCommand, runSpec.ID, runSpec.Label, runSpec, timeout)
+					_, err := executeStage(fmt.Sprintf("checkPrereq%d", i), executorName, dep.PrereqCommand, runSpec.ID, runSpec.Label, runSpec, timeout)
 
 					if err == nil {
 						fmt.Printf("   * OK - dependency check succeeded!\n")
 						continue
 					}
 
-					result, err := executeStage(fmt.Sprintf("getPrereq%d", i), runSpec.Script.Name, dep.GetPrereqCommand, runSpec.ID, runSpec.Label, runSpec, timeout)
+					result, err := executeStage(fmt.Sprintf("getPrereq%d", i), executorName, dep.GetPrereqCommand, runSpec.ID, runSpec.Label, runSpec, timeout)
 
 					if err != nil {
 						if result == "" {
