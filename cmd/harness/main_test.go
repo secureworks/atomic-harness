@@ -14,5 +14,5 @@ func TestTelemTools(t *testing.T) {
 	assert.Equal(t, "telemtool", tools[0].Name)
 	assert.Equal(t, "", tools[0].Suffix)
 	assert.Equal(t, "telemtool_e2e.exe", tools[1].Name)
-	assert.Equal(t, "e2e", tools[1].Suffix)
+	assert.Equal(t, "_e2e", tools[1].Suffix)
 }

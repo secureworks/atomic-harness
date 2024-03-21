@@ -12,7 +12,7 @@ import (
 	types "github.com/secureworks/atomic-harness/pkg/types"
 )
 
-func ManagePrivilege(atomicTest *types.AtomicTest, runSpec *types.RunSpec) {
+func ManagePrivilege(runSpec *types.RunSpec) {
 	usr,err := user.Current()
 	if err != nil {
 		fmt.Println("ERROR: unable to determine current user", err)
@@ -20,7 +20,7 @@ func ManagePrivilege(atomicTest *types.AtomicTest, runSpec *types.RunSpec) {
 	}
 	if usr.Uid == "0" {
 		// we are running as root
-		if atomicTest.Executor.ElevationRequired {
+		if runSpec.Script.ElevationRequired {
 			fmt.Println("test requires Elevated privilege, remaining as root")
 			return
 		}
@@ -67,7 +67,7 @@ func ManagePrivilege(atomicTest *types.AtomicTest, runSpec *types.RunSpec) {
 	}
 
 	// we are normal user
-	if atomicTest.Executor.ElevationRequired {
+	if runSpec.Script.ElevationRequired {
 		fmt.Println("WARN: test requires Elevated privilege, but running as user",usr)
 		return
 	}

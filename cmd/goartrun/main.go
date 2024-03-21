@@ -7,7 +7,6 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"regexp"
 	"runtime"
 	"strings"
 
@@ -16,26 +15,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var flagTechniqueId string
-var flagTestName string
-var flagTestIndex int
 var flagTestStage string
-var flagAtomicsPath string
 var flagTempDir string
 var flagRunSpecPath string
 var flagResultsFormat string
 var flagResultsDir string
 
-var AtomicsFolderRegex = regexp.MustCompile(`PathToAtomicsFolder(\\|\/)`)
-var BlockQuoteRegex = regexp.MustCompile(`<\/?blockquote>`)
-
 func init() {
-	flag.StringVar(&flagTechniqueId, "t", "", "technique ID")
-	flag.StringVar(&flagTestName, "n", "", "test name")
-	flag.IntVar(&flagTestIndex, "i", -1, "0-based test index")
 
 	flag.StringVar(&flagTestStage, "stage", "", "single stage (checkprereq, getprereq, test, cleanup)")
-	flag.StringVar(&flagAtomicsPath, "atomicsdir", "", "path to atomics folder (required)")
 	flag.StringVar(&flagTempDir, "tempdir", "", "path to working folder to use for test. Will be random if not set")
 	flag.StringVar(&flagRunSpecPath, "config", "", "path to RunSpec config. Use - for stdin")
 	flag.StringVar(&flagResultsFormat, "resultsformat", "json", "json or yaml output summary file")
@@ -62,20 +50,8 @@ func LoadRunSpec(path string, runSpec *types.RunSpec) error {
 }
 
 func FillRunSpecFromFlags(runSpec *types.RunSpec) {
-	runSpec.Technique = flagTechniqueId
-	runSpec.TestName = flagTestName
-	runSpec.TestIndex = flagTestIndex
-	runSpec.AtomicsDir = flagAtomicsPath
 	runSpec.TempDir = flagTempDir
 	runSpec.ResultsDir = flagResultsDir
-
-	// TODO: get input args
-	/*
-		for _, arg := range flag.Args() {
-			// get input settings and env variables
-
-		}*/
-
 }
 
 func main() {
@@ -90,12 +66,6 @@ func main() {
 	}
 	timeout := runSpec.Timeout
 	// TODO: check for required params
-
-	atomicTest, err := getTest(runSpec.Technique, runSpec.TestName, runSpec.TestIndex, runSpec)
-	if err != nil {
-		fmt.Println("Unable to find AtomicTest for ", runSpec)
-		os.Exit(int(types.StatusRunnerFailure))
-	}
 
 	if runSpec.TempDir == "" {
 		runSpec.TempDir, err = os.MkdirTemp("", "goart-")
@@ -123,17 +93,17 @@ func main() {
 	}
 
 	if runtime.GOOS != "windows" {
-		ManagePrivilege(atomicTest, runSpec)
+		ManagePrivilege(runSpec)
 	}
 
-	test, err, status := Execute(atomicTest, runSpec, int(timeout))
+	retval, err, status := Execute(runSpec, int(timeout))
 	if err != nil {
 		fmt.Println("error occurred:", err)
-		if test == nil {
+		if retval == nil {
 			os.Exit(int(status))
 		}
 	}
-	test.Status = int(status)
+	retval.Status = int(status)
 
 	var (
 		plan []byte
@@ -143,12 +113,12 @@ func main() {
 	err = nil
 	switch ext {
 	case "json":
-		plan, err = json.MarshalIndent(test, "", "  ")
+		plan, err = json.MarshalIndent(retval, "", "  ")
 		if err != nil {
 			fmt.Println("failed to marshal report", err)
 		}
 	case "yaml":
-		plan, _ = yaml.Marshal(test)
+		plan, _ = yaml.Marshal(retval)
 		if err != nil {
 			fmt.Println("failed to marshal report", err)
 		}

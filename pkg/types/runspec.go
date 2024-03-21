@@ -6,22 +6,35 @@ import (
 
 // RunSpec - schema for goartrun job
 type RunSpec struct {
-	Technique string
-	TestName  string
-	TestIndex int
-	TestGuid  string
+	ID         string
+	Label      string
 
-	AtomicsDir string
 	TempDir    string
 	ResultsDir string
 	Username   string
 
-	Inputs map[string]string
-	//Envs       []string
+    EnvOverrides map[string]string
+    Script       *AtomicExecutor
+
+	DependencyExecutorName string
+	Dependencies []Dependency
 
 	Stage   string
 	Timeout int64
 }
+
+type ScriptResults struct {
+        Spec RunSpec
+
+        Status      int
+        IsCleanedUp bool
+        StartTime   int64
+        EndTime     int64
+
+        CommandStdout string
+        ErrorMsg      string
+}
+
 
 type TestState int
 
